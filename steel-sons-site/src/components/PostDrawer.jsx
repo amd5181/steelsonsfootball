@@ -33,21 +33,21 @@ export default function PostDrawer({ open, onClose, onPost }) {
 
       {/* Slide-in Panel */}
       <div
-        className={`absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl transform transition-transform duration-300 ${
+        className={`absolute right-0 top-16 h-[calc(100%-4rem)] w-full max-w-md bg-white shadow-xl transform transition-transform duration-300 ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
       >
         <div className="relative p-4 border-b flex items-center">
-            <h2 className="text-lg font-semibold flex-grow">New Post</h2>
-            <button
-                onClick={onClose}
-                className="text-gray-700 hover:text-red-600 text-3xl font-bold"
-                aria-label="Close"
-            >
-                &larr;
-            </button>
+          <h2 className="text-lg font-semibold flex-grow">New Post</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-700 hover:text-red-600 text-3xl font-bold"
+            aria-label="Close"
+          >
+            &larr;
+          </button>
         </div>
 
         <div className="p-4 overflow-y-auto max-h-[calc(100%-4rem)]">
