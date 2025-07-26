@@ -302,12 +302,18 @@ export default function PostCard({
         script.onload = () => {
           // Once the script is loaded, load the widgets
           if (window.twttr && window.twttr.widgets) {
-            window.twttr.widgets.load();
+            setTimeout(() => {
+              window.twttr.widgets?.load();
+            }, 0);
+
           }
         };
       } else if (window.twttr && window.twttr.widgets) {
         // If twttr is already loaded, just load the widgets to render new embeds
-        window.twttr.widgets.load();
+        setTimeout(() => {
+          window.twttr.widgets?.load();
+        }, 0);
+
       }
     }
   }, [embed]); // Depend on the embed object to re-run when it changes
