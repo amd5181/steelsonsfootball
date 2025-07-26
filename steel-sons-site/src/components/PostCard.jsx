@@ -39,6 +39,11 @@ export default function PostCard({
   const [posterUrl, setPosterUrl] = useState(null);
   const [showPlayOverlay, setShowPlayOverlay] = useState(true);
   const [embed, setEmbed] = useState(null);
+  const [postType, setPostType] = useState('general');
+  const [tradeData, setTradeData] = useState(null);
+  const [pollData, setPollData] = useState(null);
+  const [hasVoted, setHasVoted] = useState(false);
+
 
   const [reactions, setReactions] = useState(EMOJI_SET);
   const [comments, setComments] = useState([]);
@@ -51,6 +56,22 @@ export default function PostCard({
       const snap = await getDoc(postRef);
       if (snap.exists()) {
         const data = snap.data();
+        setPostType(data.type || 'general');
+
+        if (data.type === 'trade') {
+          setTradeData({
+            giving: data.giving || '',
+            seeking: data.seeking || '',
+            notes: data.notes || '',
+          });
+        }
+
+        if (data.type === 'poll') {
+          setPollData(data.poll);
+          const voted = localStorage.getItem(`voted-${postId}`);
+          setHasVoted(!!voted);
+        }
+
         const fromFirestore = data.reactions || {};
         const mergedReactions = { ...EMOJI_SET, ...fromFirestore };
         setReactions(mergedReactions);
@@ -381,6 +402,92 @@ export default function PostCard({
 
 
       {renderEmbed()}
+      setPostType(data.type || 'general');
+
+      if (data.type === 'trade') {
+        setTradeData({
+          giving: data.giving || '',
+          seeking: data.seeking || '',
+          notes: data.notes || '',
+        });
+      }
+
+      if (data.type === 'poll') {
+        setPollData(data.poll);
+        const voted = localStorage.getItem(`voted-${postId}`);
+        setHasVoted(!!voted);
+      }
+      {/* TRADE BLOCK RENDERING */}
+      {postType === 'trade' && tradeData && (
+        <div className="mt-4 border rounded-lg p-4 bg-yellow-50">
+          <h4 className="text-sm font-bold text-yellow-700 uppercase mb-2">Trade Block</h4>
+          {tradeData.giving && (
+            <p className="text-sm"><strong>Giving:</strong> {tradeData.giving}</p>
+          )}
+          {tradeData.seeking && (
+            <p className="text-sm"><strong>Seeking:</strong> {tradeData.seeking}</p>
+          )}
+          {tradeData.notes && (
+            <p className="text-sm"><strong>Notes:</strong> {tradeData.notes}</p>
+          )}
+        </div>
+      )}
+
+      {/* POLL RENDERING */}
+      {postType === 'poll' && pollData && (
+        <div className="mt-4 border rounded-lg p-4 bg-blue-50">
+          <h4 className="text-sm font-bold text-blue-700 uppercase mb-2">Poll</h4>
+          <p className="text-sm font-semibold text-gray-800 mb-2">{pollData.question}</p>
+
+          {!hasVoted ? (
+            <ul className="space-y-2">
+              {pollData.options.map((opt, idx) => (
+                <li key={idx}>
+                  <button
+                    onClick={async () => {
+                      const updated = [...pollData.options];
+                      updated[idx].votes = [...(updated[idx].votes || []), Date.now()];
+
+                      await updateDoc(postRef, {
+                        [`poll.options`]: updated,
+                      });
+
+                      localStorage.setItem(`voted-${postId}`, '1');
+                      setHasVoted(true);
+                      setPollData(prev => ({
+                        ...prev,
+                        options: updated,
+                      }));
+                    }}
+                    className="w-full text-left px-4 py-2 bg-blue-100 hover:bg-blue-200 rounded"
+                  >
+                    {opt.text}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <ul className="space-y-2">
+              {pollData.options.map((opt, idx) => {
+                const voteCount = opt.votes?.length || 0;
+                const totalVotes = pollData.options.reduce((sum, o) => sum + (o.votes?.length || 0), 0);
+                const percent = totalVotes ? Math.round((voteCount / totalVotes) * 100) : 0;
+                return (
+                  <li key={idx} className="bg-white border rounded p-2">
+                    <div className="flex justify-between text-sm font-medium">
+                      <span>{opt.text}</span>
+                      <span>{voteCount} vote{voteCount !== 1 ? 's' : ''} ({percent}%)</span>
+                    </div>
+                    <div className="h-2 bg-blue-100 rounded mt-1 overflow-hidden">
+                      <div className="h-full bg-blue-400" style={{ width: `${percent}%` }}></div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center gap-3 mt-4 text-xl">
         {Object.keys(reactions).map((emoji) => (

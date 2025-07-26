@@ -6,12 +6,22 @@ const CLOUD_NAME = 'dsvpfi9te';
 const UPLOAD_PRESET = 'my_forum_uploads';
 
 export default function PostComposer({ onPost }) {
+  const [postType, setPostType] = useState('general');
   const [name, setName] = useState('');
   const [text, setText] = useState('');
   const [file, setFile] = useState(null);
   const [embedUrl, setEmbedUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+
+  // Trade Block
+  const [giving, setGiving] = useState('');
+  const [seeking, setSeeking] = useState('');
+  const [notes, setNotes] = useState('');
+
+  // Poll
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
 
   const handleUpload = async () => {
     const formData = new FormData();
@@ -34,7 +44,6 @@ export default function PostComposer({ onPost }) {
     try {
       const u = new URL(url);
 
-      // YouTube
       if (u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')) {
         const id = u.searchParams.get('v') || u.pathname.split('/').pop();
         return {
@@ -44,7 +53,6 @@ export default function PostComposer({ onPost }) {
         };
       }
 
-      // Giphy
       if (u.hostname.includes('giphy.com')) {
         const id = u.pathname.split('/').pop();
         return {
@@ -54,7 +62,6 @@ export default function PostComposer({ onPost }) {
         };
       }
 
-      // X/Twitter
       if (u.hostname.includes('twitter.com') || u.hostname.includes('x.com')) {
         return {
           type: 'embed-html',
@@ -78,47 +85,97 @@ export default function PostComposer({ onPost }) {
       return;
     }
 
-    if (!text.trim() && !file && !embedUrl.trim()) {
-      setError('Post must include text, media, or an embed');
-      return;
-    }
+    let payload = {
+      name: name.trim(),
+      createdAt: Date.now(),
+      type: postType,
+      reactions: { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 },
+      comments: [],
+    };
 
-    setUploading(true);
-
-    let media = null;
-    if (file) {
-      try {
-        media = await handleUpload();
-      } catch (err) {
-        setError('Upload failed');
-        setUploading(false);
+    if (postType === 'general') {
+      if (!text.trim() && !file && !embedUrl.trim()) {
+        setError('Post must include text, media, or an embed');
         return;
       }
-    }
 
-    const embed = embedUrl.trim() ? parseEmbed(embedUrl.trim()) : null;
+      setUploading(true);
 
-    try {
-      await addDoc(collection(db, 'posts'), {
-        name: name.trim(),
+      let media = null;
+      if (file) {
+        try {
+          media = await handleUpload();
+        } catch (err) {
+          setError('Upload failed');
+          setUploading(false);
+          return;
+        }
+      }
+
+      const embed = embedUrl.trim() ? parseEmbed(embedUrl.trim()) : null;
+
+      payload = {
+        ...payload,
         text: text.trim(),
-        createdAt: Date.now(),
         mediaUrl: media?.url || null,
         mediaType: media?.type || null,
-        reactions: { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 },
-        comments: [],
         embed: embed || null,
-      });
+      };
+    }
+
+    if (postType === 'trade') {
+      if (!giving.trim() && !seeking.trim() && !notes.trim()) {
+        setError('Trade Block must include at least one field');
+        return;
+      }
+      payload = {
+        ...payload,
+        giving: giving.trim(),
+        seeking: seeking.trim(),
+        notes: notes.trim(),
+      };
+    }
+
+    if (postType === 'poll') {
+      if (!pollQuestion.trim()) {
+        setError('Poll must include a question');
+        return;
+      }
+      const cleanedOptions = pollOptions.map((opt) => opt.trim()).filter(Boolean);
+      if (cleanedOptions.length < 2) {
+        setError('Poll must have at least 2 options');
+        return;
+      }
+      payload = {
+        ...payload,
+        poll: {
+          question: pollQuestion.trim(),
+          options: cleanedOptions.map((text) => ({
+            text,
+            votes: [],
+          })),
+        },
+      };
+    }
+
+    try {
+      await addDoc(collection(db, 'posts'), payload);
     } catch (err) {
       setError('Failed to save post');
       setUploading(false);
       return;
     }
 
+    // Reset
     setName('');
     setText('');
     setFile(null);
     setEmbedUrl('');
+    setGiving('');
+    setSeeking('');
+    setNotes('');
+    setPollQuestion('');
+    setPollOptions(['', '']);
     setUploading(false);
     onPost?.();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -127,6 +184,16 @@ export default function PostComposer({ onPost }) {
   return (
     <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-4 max-w-2xl mx-auto mt-6 space-y-4">
       {error && <div className="text-red-500 text-sm">{error}</div>}
+
+      <select
+        value={postType}
+        onChange={(e) => setPostType(e.target.value)}
+        className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+      >
+        <option value="general">General Post</option>
+        <option value="trade">Trade Block</option>
+        <option value="poll">Poll</option>
+      </select>
 
       <input
         type="text"
@@ -137,28 +204,99 @@ export default function PostComposer({ onPost }) {
         required
       />
 
-      <textarea
-        placeholder="What's on your mind?"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-        rows={3}
-      />
+      {postType === 'general' && (
+        <>
+          <textarea
+            placeholder="What's on your mind?"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+            rows={3}
+          />
+          <input
+            type="file"
+            accept="image/*,video/*"
+            onChange={(e) => setFile(e.target.files?.[0])}
+            className="text-sm"
+          />
+          <input
+            type="url"
+            placeholder="Embed a URL (YouTube, Giphy, X/Twitter)"
+            value={embedUrl}
+            onChange={(e) => setEmbedUrl(e.target.value)}
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+          />
+        </>
+      )}
 
-      <input
-        type="file"
-        accept="image/*,video/*"
-        onChange={(e) => setFile(e.target.files?.[0])}
-        className="text-sm"
-      />
+      {postType === 'trade' && (
+        <>
+          <input
+            type="text"
+            placeholder="Players/Positions Giving Away"
+            value={giving}
+            onChange={(e) => setGiving(e.target.value)}
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+          />
+          <input
+            type="text"
+            placeholder="Players/Positions Seeking"
+            value={seeking}
+            onChange={(e) => setSeeking(e.target.value)}
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+          />
+          <textarea
+            placeholder="Comments, deadline, or other details"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+            rows={3}
+          />
+        </>
+      )}
 
-      <input
-        type="url"
-        placeholder="Embed a URL (YouTube, Giphy, X/Twitter)"
-        value={embedUrl}
-        onChange={(e) => setEmbedUrl(e.target.value)}
-        className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-      />
+      {postType === 'poll' && (
+        <>
+          <input
+            type="text"
+            placeholder="Poll Question"
+            value={pollQuestion}
+            onChange={(e) => setPollQuestion(e.target.value)}
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+          />
+          {pollOptions.map((opt, i) => (
+            <div key={i} className="flex items-center space-x-2">
+              <input
+                type="text"
+                placeholder={`Option ${i + 1}`}
+                value={opt}
+                onChange={(e) =>
+                  setPollOptions((prev) =>
+                    prev.map((o, idx) => (idx === i ? e.target.value : o))
+                  )
+                }
+                className="flex-grow border border-gray-300 rounded px-3 py-2 text-sm"
+              />
+              {pollOptions.length > 2 && (
+                <button
+                  type="button"
+                  onClick={() => setPollOptions((prev) => prev.filter((_, idx) => idx !== i))}
+                  className="text-xs text-red-500"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setPollOptions((prev) => [...prev, ''])}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            + Add Option
+          </button>
+        </>
+      )}
 
       {uploading && (
         <div className="w-full h-2 bg-gray-200 rounded overflow-hidden">
