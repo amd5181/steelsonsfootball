@@ -43,11 +43,12 @@ export default function PostDrawer({ open, onClose, onPost }) {
           <h2 className="text-lg font-semibold">New Post</h2>
           <button
             onClick={onClose}
-            className="text-2xl font-bold text-gray-500 hover:text-gray-800 px-2 py-1"
+            className="absolute top-2 right-2 text-3xl text-gray-600 hover:text-rose-500 focus:outline-none"
             aria-label="Close"
           >
             &rarr;
           </button>
+
         </div>
 
         <div className="p-4 overflow-y-auto max-h-[calc(100%-4rem)]">
