@@ -21,14 +21,16 @@ export function parseEmbedUrl(url) {
       } : null;
     }
 
-    // Twitter/X normalization
+    // Twitter/X: Account for both twitter.com and x.com hostnames
     if (hostname.includes('twitter.com') || hostname.includes('x.com')) {
-    const match = url.match(/status\/(\d+)/);
-    if (match) {
+      // This regex captures the full tweet URL, including the username and status ID
+      const match = url.match(/(https?:\/\/(?:www\.)?(twitter|x)\.com\/\w+\/status\/\d+)/i);
+      if (match && match[1]) {
         return {
-        type: 'twitter',
-        url: `https://twitter.com/i/web/status/${match[1]}`, // 👈 Canonical embed format
+          type: 'twitter',
+          url: match[1], // Return the full, original tweet/post URL for the widget
         };
+      }
     }
 
     // Giphy

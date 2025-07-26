@@ -33,41 +33,30 @@ export default function PinGate({ onUnlock }) {
   }
 
   return (
-    <div style={styles.overlay}>
-      <form onSubmit={handleSubmit} style={styles.modal}>
-        <h2>Enter Access PIN</h2>
+    <div className="fixed inset-0 bg-gray-900 bg-opacity-90 flex items-center justify-center z-50">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-gray-800 text-white w-11/12 max-w-sm p-6 rounded-2xl shadow-xl flex flex-col items-center"
+      >
+        <h2 className="text-xl font-bold mb-4 tracking-wide text-yellow-400">Steel Sons Access</h2>
+
         <input
           type="password"
           value={pin}
           onChange={(e) => setPin(e.target.value)}
-          style={styles.input}
           placeholder="Enter PIN"
+          className="w-full p-3 rounded-lg bg-gray-700 text-white text-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 mb-4"
         />
-        <button type="submit" style={styles.button}>Unlock</button>
-        {error && <p style={styles.error}>{error}</p>}
+
+        <button
+          type="submit"
+          className="bg-yellow-400 text-black font-semibold px-6 py-2 rounded-lg hover:bg-yellow-300 transition"
+        >
+          Unlock
+        </button>
+
+        {error && <p className="text-red-500 mt-3">{error}</p>}
       </form>
     </div>
   );
 }
-
-const styles = {
-  overlay: {
-    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-    background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center',
-    zIndex: 9999
-  },
-  modal: {
-    background: '#fff', padding: '2rem', borderRadius: '10px',
-    display: 'flex', flexDirection: 'column', alignItems: 'center',
-    width: '300px'
-  },
-  input: {
-    fontSize: '1rem', padding: '0.5rem', marginTop: '1rem', width: '100%'
-  },
-  button: {
-    marginTop: '1rem', padding: '0.5rem 1rem', fontSize: '1rem'
-  },
-  error: {
-    color: 'red', marginTop: '1rem'
-  }
-};
