@@ -8,9 +8,10 @@ import {
   increment,
   onSnapshot, // Import onSnapshot for real-time updates
 } from 'firebase/firestore';
+// Assuming db is initialized elsewhere, e.g., in a separate firebase.js
 // import { initializeApp } from 'firebase/app'; // Not needed here as db is imported
 import { db } from '../lib/firebase'; // Assuming db is initialized elsewhere
-import { parseEmbedUrl } from '../utils/embedParser';
+import { parseEmbedUrl } from '../utils/embedParser'; // This will be updated/reviewed
 
 
 // Global variable to track the currently playing video.
@@ -32,48 +33,6 @@ function formatDate(timestamp) {
     timeStyle: 'short',
   });
 }
-
-/**
- * Extracts the YouTube video ID from a YouTube URL.
- * Note: This function is primarily for internal use if you need the ID,
- * but the parseEmbedUrl now returns the direct embed URL.
- * @param {string} url - The YouTube URL.
- * @returns {string|null} The YouTube video ID or null if invalid.
- */
-const extractYouTubeID = (url) => {
-  try {
-    const urlObj = new URL(url);
-    if (urlObj.hostname === 'youtu.be') {
-      return urlObj.pathname.slice(1); // remove leading slash
-    } else if (
-      urlObj.hostname === 'www.youtube.com' ||
-      urlObj.hostname === 'youtube.com'
-    ) {
-      return urlObj.searchParams.get('v');
-    }
-  } catch (error) {
-    console.error('Invalid YouTube URL:', error);
-  }
-  return null;
-};
-
-/**
- * Extracts the Vimeo video ID from a Vimeo URL.
- * Note: This function is primarily for internal use if you need the ID,
- * but the parseEmbedUrl now returns the direct embed URL.
- * @param {string} url - The Vimeo URL.
- * @returns {string|null} The Vimeo video ID or null if invalid.
- */
-const extractVimeoID = (url) => {
-  try {
-    const urlObj = new URL(url);
-    const pathSegments = urlObj.pathname.split('/');
-    return pathSegments[pathSegments.length - 1];
-  } catch (error) {
-    console.error('Invalid Vimeo URL:', error);
-    return null;
-  }
-};
 
 /**
  * PostCard component to display various types of posts (general, trade, poll)
@@ -305,6 +264,7 @@ export default function PostCard({
           console.log("Twitter Embed - Attempting to load for postId:", postId, "Target element:", targetElement);
           // Use a small delay to ensure the blockquote is in the DOM
           // before trying to render it.
+          // A slightly longer delay might be needed in some cases, or more robust DOM observation
           setTimeout(() => {
             if (targetElement) {
               window.twttr.widgets.load(targetElement)
@@ -327,7 +287,7 @@ export default function PostCard({
       if (typeof window.twttr === 'undefined') {
         console.log("Twitter Embed - Loading widgets.js script...");
         const script = document.createElement('script');
-        script.setAttribute('src', 'https://platform.twitter.com/widgets.js');
+        script.setAttribute('src', '[https://platform.twitter.com/widgets.js](https://platform.twitter.com/widgets.js)');
         script.setAttribute('async', '');
         script.setAttribute('charset', 'utf-8');
         document.body.appendChild(script);
