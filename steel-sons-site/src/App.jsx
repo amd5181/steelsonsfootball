@@ -12,7 +12,7 @@ function App() {
 
   return (
     <Router>
-      <div className="bg-pgh-gray min-h-screen text-white">
+      <div className="bg-gray-100 min-h-screen">
         <Header
           access={access}
           onReset={() => {
