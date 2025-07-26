@@ -149,6 +149,7 @@ export default function PostCard({
         setReactions(mergedReactions);
         setComments(data.comments || []);
         setEmbed(data.embed || null);
+        console.log("PostCard - Fetched embed data:", data.embed); // Log embed data
       } else {
         // Handle case where post might have been deleted
         console.log("Post does not exist or has been deleted.");
@@ -300,24 +301,45 @@ export default function PostCard({
       const loadTwitterWidgets = () => {
         // Ensure twttr.widgets is available before calling load
         if (window.twttr && window.twttr.widgets) {
+          const targetElement = document.getElementById(`tweet-embed-${postId}`);
+          console.log("Twitter Embed - Attempting to load for postId:", postId, "Target element:", targetElement);
           // Use a small delay to ensure the blockquote is in the DOM
           // before trying to render it.
           setTimeout(() => {
-            window.twttr.widgets.load(document.getElementById(`tweet-embed-${postId}`));
+            if (targetElement) {
+              window.twttr.widgets.load(targetElement)
+                .then((el) => {
+                  console.log("Twitter widget loaded successfully for postId:", postId, el);
+                })
+                .catch((err) => {
+                  console.error("Error loading Twitter widget for postId:", postId, err);
+                });
+            } else {
+              console.warn("Twitter Embed - Target element not found for postId:", postId);
+            }
           }, 100); // A small delay (e.g., 100ms) can help
+        } else {
+          console.warn("Twitter Embed - window.twttr or window.twttr.widgets not available.");
         }
       };
 
       // Check if twttr object exists, if not, load the script
       if (typeof window.twttr === 'undefined') {
+        console.log("Twitter Embed - Loading widgets.js script...");
         const script = document.createElement('script');
         script.setAttribute('src', 'https://platform.twitter.com/widgets.js');
         script.setAttribute('async', '');
         script.setAttribute('charset', 'utf-8');
         document.body.appendChild(script);
-        script.onload = loadTwitterWidgets; // Load widgets once script is loaded
+        script.onload = () => {
+          console.log("Twitter Embed - widgets.js script loaded.");
+          loadTwitterWidgets(); // Load widgets once script is loaded
+        };
+        script.onerror = (e) => {
+          console.error("Twitter Embed - Failed to load widgets.js script:", e);
+        };
       } else {
-        // If twttr is already loaded, just load the widgets to render new embeds
+        console.log("Twitter Embed - widgets.js script already loaded, attempting to load widgets.");
         loadTwitterWidgets();
       }
     }
@@ -428,10 +450,12 @@ export default function PostCard({
 
     let type, url;
     const parsed = parseEmbedUrl(embed.url);
+    console.log("renderEmbed - Parsed embed:", parsed); // Log parsed embed
     if (parsed) {
       type = parsed.type;
       url = parsed.url;
     } else {
+      console.warn("renderEmbed - Failed to parse embed URL:", embed.url); // Warn if parsing fails
       return null; // skip rendering if it can't be parsed
     }
 
@@ -486,6 +510,7 @@ export default function PostCard({
     if (type === 'twitter') {
       // Twitter embeds are handled by the twttr.widgets.load() script
       // We need to provide the blockquote element with the full tweet URL in the anchor tag
+      console.log("renderEmbed - Rendering Twitter blockquote with URL:", url); // Log Twitter URL
       return (
         <div className="mt-4" id={`tweet-embed-${postId}`}> {/* Added unique ID for targeted loading */}
           <blockquote className="twitter-tweet" data-dnt="true" data-theme="light">
