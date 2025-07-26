@@ -11,8 +11,6 @@ export default function PostDrawer({ open, onClose, onPost }) {
   const handleTouchMove = (e) => {
     if (!startXRef.current) return;
     const deltaX = e.touches[0].clientX - startXRef.current;
-
-    // Swipe right to close if horizontal movement is strong
     if (deltaX > 75) {
       onClose();
       startXRef.current = null;
@@ -45,11 +43,13 @@ export default function PostDrawer({ open, onClose, onPost }) {
           <h2 className="text-lg font-semibold">New Post</h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-xl leading-none"
+            className="text-2xl font-bold text-gray-500 hover:text-gray-800 px-2 py-1"
+            aria-label="Close"
           >
-            ×
+            &rarr;
           </button>
         </div>
+
         <div className="p-4 overflow-y-auto max-h-[calc(100%-4rem)]">
           <PostComposer
             onPost={() => {
