@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import { initializeApp } from 'firebase/app';
 import { db } from '../lib/firebase';
+import { parseEmbedUrl } from '../utils/embedParser';
 
 
 // Global variable to track the currently playing video.
@@ -382,7 +383,18 @@ export default function PostCard({
    * This function is called within the JSX.
    */
   const renderEmbed = () => {
-    if (!embed?.type || !embed?.url) return null;
+    if (!embed) return null;
+
+    let { type, url } = embed;
+    if (!type && url) {
+      const parsed = parseEmbedUrl(url);
+      if (parsed) {
+        type = parsed.type;
+        url = parsed.url;
+      }
+    }
+
+    if (!type || !url) return null;
 
     const url = embed.url;
 
