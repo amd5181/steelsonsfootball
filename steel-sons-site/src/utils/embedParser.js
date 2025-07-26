@@ -1,40 +1,53 @@
-// utils/embedParser.js
-export function parseEmbedUrl(url) {
-  try {
-    const parsed = new URL(url);
-    const hostname = parsed.hostname.replace(/^www\./, '').toLowerCase();
+export function parseEmbedUrl(input) {
+  if (!input) return null;
 
-    if (hostname === 'youtube.com' || hostname === 'youtu.be') {
-      return { type: 'youtube', url };
-    }
-    if (hostname === 'vimeo.com') {
-      return { type: 'vimeo', url };
-    }
-    if (hostname === 'giphy.com') {
-      return { type: 'giphy', url };
-    }
-    if (hostname === 'tenor.com') {
-      return { type: 'tenor', url };
-    }
-    if (hostname === 'twitter.com' || hostname === 'x.com') {
-      return { type: 'twitter', url };
-    }
-    if (hostname.includes('tiktok.com')) {
-      return { type: 'tiktok', url };
-    }
-    if (hostname.includes('instagram.com')) {
-      return { type: 'instagram', url };
-    }
-    if (/\.(jpeg|jpg|gif|png|webp)$/i.test(url)) {
-      return { type: 'image', url };
-    }
-    if (/\.(mp4|mov|webm)$/i.test(url)) {
-      return { type: 'video', url };
-    }
+  const url = input.trim();
 
-    return { type: 'link', url };
-  } catch (error) {
-    console.error('Failed to parse embed URL:', error);
-    return null;
+  // Handle YouTube
+  if (/youtu\.be|youtube\.com/.test(url)) {
+    return { type: 'youtube', url };
   }
+
+  // Handle Vimeo
+  if (/vimeo\.com/.test(url)) {
+    return { type: 'vimeo', url };
+  }
+
+  // Handle Giphy
+  if (/giphy\.com\/media/.test(url)) {
+    return { type: 'giphy', url };
+  }
+
+  // Handle Tenor
+  if (/tenor\.com\/view/.test(url)) {
+    return { type: 'tenor', url };
+  }
+
+  // Handle Twitter/X (x.com or twitter.com)
+  if (/^(https?:\/\/)?(www\.)?(twitter\.com|x\.com)\/[A-Za-z0-9_]+\/status\/\d+/.test(url)) {
+    return { type: 'twitter', url };
+  }
+
+  // TikTok
+  if (/tiktok\.com/.test(url)) {
+    return { type: 'tiktok', url };
+  }
+
+  // Instagram
+  if (/instagram\.com/.test(url)) {
+    return { type: 'instagram', url };
+  }
+
+  // Direct image
+  if (/\.(jpg|jpeg|png|gif|webp)$/i.test(url)) {
+    return { type: 'image', url };
+  }
+
+  // Direct video
+  if (/\.(mp4|mov|webm)$/i.test(url)) {
+    return { type: 'video', url };
+  }
+
+  // Fallback generic
+  return { type: 'link', url };
 }
