@@ -1,18 +1,20 @@
-// src/lib/firebase.js
-import { initializeApp } from 'firebase/app';
+// lib/firebase.js
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
+import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCyJ4crvTcbE2uHAfzHiTICcGP7a4KKFwE",
-  authDomain: "steelsonsfantasyfootball.firebaseapp.com",
-  projectId: "steelsonsfantasyfootball",
-  storageBucket: "steelsonsfantasyfootball.firebasestorage.app",
-  messagingSenderId: "693967635959",
-  appId: "1:693967635959:web:1433bf20c411bbf5cb5af2",
-  measurementId: "G-HB0N5WMBFM"
+  apiKey: 'YOUR_API_KEY',
+  authDomain: 'YOUR_AUTH_DOMAIN',
+  projectId: 'YOUR_PROJECT_ID',
+  storageBucket: 'YOUR_STORAGE_BUCKET',
+  messagingSenderId: 'YOUR_SENDER_ID',
+  appId: 'YOUR_APP_ID',
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-export { db };
+export const db = getFirestore(app);
+export const storage = getStorage(app);
+export const auth = getAuth(app);
