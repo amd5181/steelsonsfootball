@@ -73,6 +73,7 @@ export default function PostCard({
   const [newComment, setNewComment] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); // State for custom delete confirmation
   const [isLoading, setIsLoading] = useState(true); // Loading state for post data
+  const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false); // State to track Twitter embed failure
 
   const postRef = doc(db, 'posts', postId);
 
@@ -109,6 +110,7 @@ export default function PostCard({
         setComments(data.comments || []);
         setEmbed(data.embed || null);
         console.log("PostCard - Fetched embed data:", data.embed); // Log embed data
+        setTwitterEmbedFailed(false); // Reset failure state on new data
       } else {
         // Handle case where post might have been deleted
         console.log("Post does not exist or has been deleted.");
@@ -270,16 +272,20 @@ export default function PostCard({
               window.twttr.widgets.load(targetElement)
                 .then((el) => {
                   console.log("Twitter widget loaded successfully for postId:", postId, el);
+                  setTwitterEmbedFailed(false); // Mark as successful
                 })
                 .catch((err) => {
                   console.error("Error loading Twitter widget for postId:", postId, err);
+                  setTwitterEmbedFailed(true); // Mark as failed
                 });
             } else {
               console.warn("Twitter Embed - Target element not found for postId:", postId);
+              setTwitterEmbedFailed(true); // Mark as failed if element not found
             }
           }, 100); // A small delay (e.g., 100ms) can help
         } else {
           console.warn("Twitter Embed - window.twttr or window.twttr.widgets not available.");
+          setTwitterEmbedFailed(true); // Mark as failed if script not available
         }
       };
 
@@ -287,7 +293,7 @@ export default function PostCard({
       if (typeof window.twttr === 'undefined') {
         console.log("Twitter Embed - Loading widgets.js script...");
         const script = document.createElement('script');
-        script.setAttribute('src', '[https://platform.twitter.com/widgets.js](https://platform.twitter.com/widgets.js)');
+        script.setAttribute('src', 'https://platform.twitter.com/widgets.js');
         script.setAttribute('async', '');
         script.setAttribute('charset', 'utf-8');
         document.body.appendChild(script);
@@ -297,6 +303,7 @@ export default function PostCard({
         };
         script.onerror = (e) => {
           console.error("Twitter Embed - Failed to load widgets.js script:", e);
+          setTwitterEmbedFailed(true); // Mark as failed if script fails to load
         };
       } else {
         console.log("Twitter Embed - widgets.js script already loaded, attempting to load widgets.");
@@ -472,11 +479,22 @@ export default function PostCard({
       // We need to provide the blockquote element with the full tweet URL in the anchor tag
       console.log("renderEmbed - Rendering Twitter blockquote with URL:", url); // Log Twitter URL
       return (
-        <div className="mt-4" id={`tweet-embed-${postId}`}> {/* Added unique ID for targeted loading */}
-          <blockquote className="twitter-tweet" data-dnt="true" data-theme="light">
-            {/* The href must be the full, canonical tweet URL for the widget to work */}
-            <a href={url}></a>
-          </blockquote>
+        <div className="mt-4">
+          {twitterEmbedFailed ? (
+            <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+              <p className="font-semibold mb-2">Could not load Twitter post.</p>
+              <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                Click here to view the post on X.com
+              </a>
+            </div>
+          ) : (
+            <div id={`tweet-embed-${postId}`}> {/* Added unique ID for targeted loading */}
+              <blockquote className="twitter-tweet" data-dnt="true" data-theme="light">
+                {/* The href must be the full, canonical tweet URL for the widget to work */}
+                <a href={url}></a>
+              </blockquote>
+            </div>
+          )}
         </div>
       );
     }
