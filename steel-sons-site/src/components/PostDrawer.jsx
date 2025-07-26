@@ -1,7 +1,24 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import PostComposer from './PostComposer';
 
 export default function PostDrawer({ open, onClose, onPost }) {
+  const startXRef = useRef(null);
+
+  const handleTouchStart = (e) => {
+    startXRef.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e) => {
+    if (!startXRef.current) return;
+    const deltaX = e.touches[0].clientX - startXRef.current;
+
+    // Swipe right to close if horizontal movement is strong
+    if (deltaX > 75) {
+      onClose();
+      startXRef.current = null;
+    }
+  };
+
   return (
     <div
       className={`fixed inset-0 z-40 transition-all duration-300 ${
@@ -21,6 +38,8 @@ export default function PostDrawer({ open, onClose, onPost }) {
         className={`absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl transform transition-transform duration-300 ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
       >
         <div className="p-4 border-b flex justify-between items-center">
           <h2 className="text-lg font-semibold">New Post</h2>
@@ -32,10 +51,12 @@ export default function PostDrawer({ open, onClose, onPost }) {
           </button>
         </div>
         <div className="p-4 overflow-y-auto max-h-[calc(100%-4rem)]">
-          <PostComposer onPost={() => {
-            onPost();
-            onClose();
-          }} />
+          <PostComposer
+            onPost={() => {
+              onPost();
+              onClose();
+            }}
+          />
         </div>
       </div>
     </div>
