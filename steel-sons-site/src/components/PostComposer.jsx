@@ -20,19 +20,41 @@ export default function PostComposer({ onPost }) {
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
 
-  const handlePaste = (event) => {
+  const handlePaste = async (event) => {
     const items = event.clipboardData?.items;
-    if (!items) return;
+    const html = event.clipboardData?.getData('text/html');
 
-    for (const item of items) {
-      if (item.type.startsWith('image/')) {
-        const pastedFile = item.getAsFile();
-        if (pastedFile) {
-          setFile(pastedFile);
+    // Step 1: Try parsing <img> src from clipboard HTML
+    if (html) {
+      const match = html.match(/<img[^>]+src="([^">]+\.gif[^">]*)"/i);
+      if (match && match[1]) {
+        const gifUrl = match[1];
+
+        try {
+          const response = await fetch(gifUrl, { mode: 'cors' });
+          const blob = await response.blob();
+          const file = new File([blob], 'pasted.gif', { type: 'image/gif' });
+          setFile(file);
+          return;
+        } catch (err) {
+          console.error('Failed to fetch pasted gif:', err);
+        }
+      }
+    }
+
+    // Step 2: Fall back to clipboard image blob
+    if (items) {
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const pastedFile = item.getAsFile();
+          if (pastedFile) {
+            setFile(pastedFile);
+          }
         }
       }
     }
   };
+
 
   const handleUpload = async () => {
     const formData = new FormData();
