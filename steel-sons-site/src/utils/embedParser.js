@@ -4,30 +4,31 @@ export function parseEmbedUrl(url) {
     const hostname = parsedUrl.hostname.toLowerCase();
 
     // YouTube
-    if (hostname.includes('youtube.com') || hostname === 'youtu.be') {
+    if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
       const videoId = parsedUrl.searchParams.get('v') || parsedUrl.pathname.split('/')[1];
-      return {
+      return videoId ? {
         type: 'youtube',
-        url: `https://www.youtube.com/watch?v=${videoId}`,
-      };
+        url: `https://www.youtube.com/embed/${videoId}`, // Standard YouTube embed URL
+      } : null;
     }
 
     // Vimeo
     if (hostname.includes('vimeo.com')) {
       const id = parsedUrl.pathname.split('/').pop();
-      return {
+      return id ? {
         type: 'vimeo',
-        url: `https://vimeo.com/${id}`,
-      };
+        url: `https://player.vimeo.com/video/${id}`, // Standard Vimeo embed URL
+      } : null;
     }
 
-    // Twitter/X
+    // Twitter/X: Account for both twitter.com and x.com hostnames
     if (hostname.includes('twitter.com') || hostname.includes('x.com')) {
-      const match = url.match(/status\/(\d+)/);
-      if (match) {
+      // This regex captures the full tweet URL, including the username and status ID
+      const match = url.match(/(https?:\/\/(?:www\.)?(twitter|x)\.com\/\w+\/status\/\d+)/i);
+      if (match && match[1]) {
         return {
           type: 'twitter',
-          url: `https://twitter.com/i/web/status/${match[1]}`,
+          url: match[1], // Return the full, original tweet/post URL for the widget
         };
       }
     }
@@ -36,7 +37,7 @@ export function parseEmbedUrl(url) {
     if (hostname.includes('giphy.com') || hostname.includes('media.giphy.com')) {
       return {
         type: 'giphy',
-        url,
+        url: url,
       };
     }
 
@@ -44,7 +45,7 @@ export function parseEmbedUrl(url) {
     if (hostname.includes('tenor.com')) {
       return {
         type: 'tenor',
-        url,
+        url: url,
       };
     }
 
@@ -52,7 +53,7 @@ export function parseEmbedUrl(url) {
     if (hostname.includes('tiktok.com')) {
       return {
         type: 'tiktok',
-        url,
+        url: url,
       };
     }
 
@@ -60,7 +61,7 @@ export function parseEmbedUrl(url) {
     if (hostname.includes('instagram.com')) {
       return {
         type: 'instagram',
-        url,
+        url: url,
       };
     }
 
@@ -68,7 +69,7 @@ export function parseEmbedUrl(url) {
     if (/\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(url)) {
       return {
         type: 'image',
-        url,
+        url: url,
       };
     }
 
@@ -76,14 +77,14 @@ export function parseEmbedUrl(url) {
     if (/\.(mp4|mov|webm)$/i.test(url)) {
       return {
         type: 'video',
-        url,
+        url: url,
       };
     }
 
     // Unknown: treat as fallback link
     return {
       type: 'link',
-      url,
+      url: url,
     };
   } catch (err) {
     console.error('Failed to parse embed URL:', url, err);

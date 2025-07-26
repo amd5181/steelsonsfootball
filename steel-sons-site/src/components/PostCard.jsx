@@ -35,6 +35,8 @@ function formatDate(timestamp) {
 
 /**
  * Extracts the YouTube video ID from a YouTube URL.
+ * Note: This function is primarily for internal use if you need the ID,
+ * but the parseEmbedUrl now returns the direct embed URL.
  * @param {string} url - The YouTube URL.
  * @returns {string|null} The YouTube video ID or null if invalid.
  */
@@ -57,6 +59,8 @@ const extractYouTubeID = (url) => {
 
 /**
  * Extracts the Vimeo video ID from a Vimeo URL.
+ * Note: This function is primarily for internal use if you need the ID,
+ * but the parseEmbedUrl now returns the direct embed URL.
  * @param {string} url - The Vimeo URL.
  * @returns {string|null} The Vimeo video ID or null if invalid.
  */
@@ -289,9 +293,21 @@ export default function PostCard({
     };
   }, [videoSource, videoType, mediaType, posterUrl, togglePlay]);
 
-  // NEW: Effect to handle Twitter widget loading
+  // NEW: Effect to handle Twitter widget loading and rendering
   useEffect(() => {
     if (embed?.type === 'twitter') {
+      // Function to load Twitter widgets
+      const loadTwitterWidgets = () => {
+        // Ensure twttr.widgets is available before calling load
+        if (window.twttr && window.twttr.widgets) {
+          // Use a small delay to ensure the blockquote is in the DOM
+          // before trying to render it.
+          setTimeout(() => {
+            window.twttr.widgets.load(document.getElementById(`tweet-embed-${postId}`));
+          }, 100); // A small delay (e.g., 100ms) can help
+        }
+      };
+
       // Check if twttr object exists, if not, load the script
       if (typeof window.twttr === 'undefined') {
         const script = document.createElement('script');
@@ -299,24 +315,13 @@ export default function PostCard({
         script.setAttribute('async', '');
         script.setAttribute('charset', 'utf-8');
         document.body.appendChild(script);
-        script.onload = () => {
-          // Once the script is loaded, load the widgets
-          if (window.twttr && window.twttr.widgets) {
-            setTimeout(() => {
-              window.twttr.widgets?.load();
-            }, 0);
-
-          }
-        };
-      } else if (window.twttr && window.twttr.widgets) {
+        script.onload = loadTwitterWidgets; // Load widgets once script is loaded
+      } else {
         // If twttr is already loaded, just load the widgets to render new embeds
-        setTimeout(() => {
-          window.twttr.widgets?.load();
-        }, 0);
-
+        loadTwitterWidgets();
       }
     }
-  }, [embed]); // Depend on the embed object to re-run when it changes
+  }, [embed, postId]); // Depend on embed and postId to re-run when they change
 
   /**
    * Handles user reaction to the post.
@@ -433,33 +438,35 @@ export default function PostCard({
     if (!type || !url) return null;
 
     if (type === 'youtube') {
-      const videoId = extractYouTubeID(url);
-      return videoId ? (
+      // The parseEmbedUrl now returns the direct embed URL for YouTube
+      return (
         <div className="mt-4">
           <iframe
             className="w-full aspect-video rounded-lg"
-            src={`https://www.youtube.com/embed/${videoId}`}
+            src={url} // Use the directly embeddable URL from parseEmbedUrl
             frameBorder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
             title="YouTube video"
           />
         </div>
-      ) : null;
+      );
     }
 
     if (type === 'vimeo') {
-      const videoId = extractVimeoID(url);
-      return videoId ? (
+      // The parseEmbedUrl now returns the direct embed URL for Vimeo
+      return (
         <div className="mt-4">
           <iframe
             className="w-full aspect-video rounded-lg"
-            src={`https://player.vimeo.com/video/${videoId}`}
+            src={url} // Use the directly embeddable URL from parseEmbedUrl
             frameBorder="0"
+            allow="autoplay; fullscreen; picture-in-picture"
             allowFullScreen
             title="Vimeo video"
           />
         </div>
-      ) : null;
+      );
     }
 
     if (type === 'giphy' || type === 'tenor') {
@@ -478,10 +485,11 @@ export default function PostCard({
 
     if (type === 'twitter') {
       // Twitter embeds are handled by the twttr.widgets.load() script
-      // We just need to provide the blockquote element
+      // We need to provide the blockquote element with the full tweet URL in the anchor tag
       return (
-        <div className="mt-4">
+        <div className="mt-4" id={`tweet-embed-${postId}`}> {/* Added unique ID for targeted loading */}
           <blockquote className="twitter-tweet" data-dnt="true" data-theme="light">
+            {/* The href must be the full, canonical tweet URL for the widget to work */}
             <a href={url}></a>
           </blockquote>
         </div>
