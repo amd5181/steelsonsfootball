@@ -9,23 +9,8 @@ import {
   onSnapshot, // Import onSnapshot for real-time updates
 } from 'firebase/firestore';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
-// Initialize Firebase for the Canvas environment
-const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-
-// Sign in immediately (important for Firestore operations)
-(async () => {
-  if (typeof __initial_auth_token !== 'undefined') {
-    await signInWithCustomToken(auth, __initial_auth_token);
-  } else {
-    await signInAnonymously(auth);
-  }
-})();
 
 // Global variable to track the currently playing video.
 // For a more robust solution in a larger app, consider using React Context API.
