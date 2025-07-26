@@ -11,7 +11,7 @@ import {
 // Assuming db is initialized elsewhere, e.g., in a separate firebase.js
 // import { initializeApp } from 'firebase/app'; // Not needed here as db is imported
 import { db } from '../lib/firebase'; // Assuming db is initialized elsewhere
-import { parseEmbedUrl } from '../utils/embedParser'; // This will be updated/reviewed
+import { parseEmbedUrl } from '../utils/embedParser';
 
 
 // Global variable to track the currently playing video.
@@ -74,6 +74,7 @@ export default function PostCard({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); // State for custom delete confirmation
   const [isLoading, setIsLoading] = useState(true); // Loading state for post data
   const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false); // State to track Twitter embed failure
+  const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false); // State to track Instagram embed failure
 
   const postRef = doc(db, 'posts', postId);
 
@@ -111,6 +112,7 @@ export default function PostCard({
         setEmbed(data.embed || null);
         console.log("PostCard - Fetched embed data:", data.embed); // Log embed data
         setTwitterEmbedFailed(false); // Reset failure state on new data
+        setInstagramEmbedFailed(false); // Reset failure state for Instagram
       } else {
         // Handle case where post might have been deleted
         console.log("Post does not exist or has been deleted.");
@@ -255,62 +257,99 @@ export default function PostCard({
     };
   }, [videoSource, videoType, mediaType, posterUrl, togglePlay]);
 
-  // NEW: Effect to handle Twitter widget loading and rendering
+  // Effect to handle Twitter widget loading and rendering
   useEffect(() => {
     if (embed?.type === 'twitter') {
-      // Function to load Twitter widgets
       const loadTwitterWidgets = () => {
-        // Ensure twttr.widgets is available before calling load
         if (window.twttr && window.twttr.widgets) {
           const targetElement = document.getElementById(`tweet-embed-${postId}`);
-          console.log("Twitter Embed - Attempting to load for postId:", postId, "Target element:", targetElement);
-          // Use a small delay to ensure the blockquote is in the DOM
-          // before trying to render it.
-          // A slightly longer delay might be needed in some cases, or more robust DOM observation
           setTimeout(() => {
             if (targetElement) {
               window.twttr.widgets.load(targetElement)
                 .then((el) => {
                   console.log("Twitter widget loaded successfully for postId:", postId, el);
-                  setTwitterEmbedFailed(false); // Mark as successful
+                  setTwitterEmbedFailed(false);
                 })
                 .catch((err) => {
                   console.error("Error loading Twitter widget for postId:", postId, err);
-                  setTwitterEmbedFailed(true); // Mark as failed
+                  setTwitterEmbedFailed(true);
                 });
             } else {
               console.warn("Twitter Embed - Target element not found for postId:", postId);
-              setTwitterEmbedFailed(true); // Mark as failed if element not found
+              setTwitterEmbedFailed(true);
             }
-          }, 100); // A small delay (e.g., 100ms) can help
+          }, 100);
         } else {
           console.warn("Twitter Embed - window.twttr or window.twttr.widgets not available.");
-          setTwitterEmbedFailed(true); // Mark as failed if script not available
+          setTwitterEmbedFailed(true);
         }
       };
 
-      // Check if twttr object exists, if not, load the script
       if (typeof window.twttr === 'undefined') {
-        console.log("Twitter Embed - Loading widgets.js script...");
         const script = document.createElement('script');
         script.setAttribute('src', 'https://platform.twitter.com/widgets.js');
         script.setAttribute('async', '');
         script.setAttribute('charset', 'utf-8');
         document.body.appendChild(script);
         script.onload = () => {
-          console.log("Twitter Embed - widgets.js script loaded.");
-          loadTwitterWidgets(); // Load widgets once script is loaded
+          loadTwitterWidgets();
         };
         script.onerror = (e) => {
           console.error("Twitter Embed - Failed to load widgets.js script:", e);
-          setTwitterEmbedFailed(true); // Mark as failed if script fails to load
+          setTwitterEmbedFailed(true);
         };
       } else {
-        console.log("Twitter Embed - widgets.js script already loaded, attempting to load widgets.");
         loadTwitterWidgets();
       }
     }
+  }, [embed, postId]);
+
+  // NEW: Effect to handle Instagram widget loading and rendering
+  useEffect(() => {
+    if (embed?.type === 'instagram') {
+      const loadInstagramWidgets = () => {
+        // Instagram's script uses window.instgrm.Embeds.process()
+        if (window.instgrm && window.instgrm.Embeds) {
+          // A small delay to ensure the blockquote is in the DOM before processing
+          setTimeout(() => {
+            try {
+              window.instgrm.Embeds.process();
+              console.log("Instagram widget processed successfully for postId:", postId);
+              setInstagramEmbedFailed(false);
+            } catch (err) {
+              console.error("Error processing Instagram widget for postId:", postId, err);
+              setInstagramEmbedFailed(true);
+            }
+          }, 100);
+        } else {
+          console.warn("Instagram Embed - window.instgrm or window.instgrm.Embeds not available.");
+          setInstagramEmbedFailed(true);
+        }
+      };
+
+      // Check if instgrm object exists, if not, load the script
+      if (typeof window.instgrm === 'undefined') {
+        console.log("Instagram Embed - Loading embed.js script...");
+        const script = document.createElement('script');
+        script.setAttribute('src', 'https://www.instagram.com/embed.js');
+        script.setAttribute('async', '');
+        script.setAttribute('charset', 'utf-8');
+        document.body.appendChild(script);
+        script.onload = () => {
+          console.log("Instagram Embed - embed.js script loaded.");
+          loadInstagramWidgets(); // Process widgets once script is loaded
+        };
+        script.onerror = (e) => {
+          console.error("Instagram Embed - Failed to load embed.js script:", e);
+          setInstagramEmbedFailed(true);
+        };
+      } else {
+        console.log("Instagram Embed - embed.js script already loaded, attempting to process widgets.");
+        loadInstagramWidgets();
+      }
+    }
   }, [embed, postId]); // Depend on embed and postId to re-run when they change
+
 
   /**
    * Handles user reaction to the post.
@@ -515,9 +554,29 @@ export default function PostCard({
     }
 
     if (type === 'instagram') {
+      // Instagram embeds are handled by the instgrm.Embeds.process() script
+      console.log("renderEmbed - Rendering Instagram blockquote with URL:", url);
       return (
         <div className="mt-4">
-          <blockquote className="instagram-media" data-instgrm-permalink={url} data-instgrm-version="14" style={{ width: '100%', margin: '0 auto' }} />
+          {instagramEmbedFailed ? (
+            <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+              <p className="font-semibold mb-2">Could not load Instagram post.</p>
+              <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                Click here to view the post on Instagram
+              </a>
+            </div>
+          ) : (
+            // Instagram's embed script expects a blockquote with specific attributes
+            <blockquote
+              className="instagram-media"
+              data-instgrm-permalink={url}
+              data-instgrm-version="14"
+              style={{ width: '100%', margin: '0 auto' }}
+            >
+              {/* The content inside the blockquote is usually just a link to the post */}
+              <a href={url} target="_blank" rel="noopener noreferrer"></a>
+            </blockquote>
+          )}
         </div>
       );
     }
