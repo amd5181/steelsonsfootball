@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 
 export default function Header({ access, onReset }) {
@@ -19,7 +20,6 @@ export default function Header({ access, onReset }) {
         </button>
       </div>
 
-      {/* Overlay */}
       {menuOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
@@ -27,7 +27,6 @@ export default function Header({ access, onReset }) {
         />
       )}
 
-      {/* Animated Drawer */}
       <div
         className={clsx(
           'fixed top-0 left-0 z-50 w-64 h-screen bg-white shadow-xl transition-transform duration-300 ease-in-out',
@@ -47,22 +46,22 @@ export default function Header({ access, onReset }) {
 
           <ul className="space-y-3">
             <li>
-              <a
-                href="/"
+              <Link
+                to="/"
                 className="text-rose-500 font-medium"
                 onClick={() => setMenuOpen(false)}
               >
                 Feed
-              </a>
+              </Link>
             </li>
             <li>
-              <a
-                href="/league-history"
+              <Link
+                to="/league-history"
                 className="text-rose-500 font-medium"
                 onClick={() => setMenuOpen(false)}
               >
                 League History
-              </a>
+              </Link>
             </li>
             {access === 'admin' && (
               <li>
