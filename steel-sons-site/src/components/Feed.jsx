@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { db } from '../lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import PostCard from './PostCard';
-import PostComposer from './PostComposer';
+import PostDrawer from './PostDrawer';
 
 export default function Feed({ access }) {
   const [posts, setPosts] = useState([]);
+  const [showComposer, setShowComposer] = useState(false);
 
   async function loadPosts() {
     const snapshot = await getDocs(collection(db, 'posts'));
@@ -19,7 +20,14 @@ export default function Feed({ access }) {
 
   return (
     <div className="max-w-2xl mx-auto mt-4 px-4">
-      <PostComposer onPost={loadPosts} />
+      <div className="flex justify-end mb-4">
+        <button
+          onClick={() => setShowComposer(true)}
+          className="bg-rose-500 hover:bg-rose-600 text-white text-sm font-semibold py-2 px-4 rounded shadow"
+        >
+          + New Post
+        </button>
+      </div>
 
       <div className="my-6">
         <h2 className="text-2xl font-bold text-gray-800">🏈 Message Feed</h2>
@@ -34,10 +42,12 @@ export default function Feed({ access }) {
           createdAt={post.createdAt}
           mediaUrl={post.mediaUrl}
           mediaType={post.mediaType}
-          access={access} // ✅ New: pass admin/guest access down
-          onUpdate={loadPosts} // ✅ Optional: so PostCard can trigger reload after delete
+          access={access}
+          onUpdate={loadPosts}
         />
       ))}
+
+      <PostDrawer open={showComposer} onClose={() => setShowComposer(false)} onPost={loadPosts} />
     </div>
   );
 }
