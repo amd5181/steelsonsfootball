@@ -14,12 +14,9 @@ export default function PostComposer({ onPost }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
 
-  // Trade Block
   const [giving, setGiving] = useState('');
   const [seeking, setSeeking] = useState('');
   const [notes, setNotes] = useState('');
-
-  // Poll
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
 
@@ -195,7 +192,10 @@ export default function PostComposer({ onPost }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-4 max-w-2xl mx-auto mt-6 space-y-4">
+    <form
+      onSubmit={handleSubmit}
+      className="bg-white shadow rounded-lg p-4 max-w-2xl mx-auto mt-6 space-y-4"
+    >
       {error && <div className="text-red-500 text-sm">{error}</div>}
 
       <div className="flex justify-center space-x-2 border-b border-gray-200 mb-4">
@@ -238,6 +238,24 @@ export default function PostComposer({ onPost }) {
             className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
             rows={3}
           />
+
+          {file && (
+            <div className="relative w-32 h-32 mt-2">
+              <img
+                src={URL.createObjectURL(file)}
+                alt="Preview"
+                className="w-full h-full object-cover rounded border"
+              />
+              <button
+                type="button"
+                onClick={() => setFile(null)}
+                className="absolute -top-2 -right-2 bg-white text-red-600 border border-gray-300 rounded-full text-xs px-2 py-1 shadow-sm"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           <input
             type="file"
             accept="image/*,video/*"
