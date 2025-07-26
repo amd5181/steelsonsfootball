@@ -484,9 +484,6 @@ export default function PostCard({
     );
   };
 
-    return null;
-  };
-
   if (isLoading) {
     return (
       <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6 mb-6 border-l-8 border-rose-400 relative animate-pulse">
