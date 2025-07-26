@@ -41,11 +41,18 @@ function formatDate(timestamp) {
 const extractYouTubeID = (url) => {
   try {
     const urlObj = new URL(url);
-    return urlObj.searchParams.get('v');
+    if (urlObj.hostname === 'youtu.be') {
+      return urlObj.pathname.slice(1); // remove leading slash
+    } else if (
+      urlObj.hostname === 'www.youtube.com' ||
+      urlObj.hostname === 'youtube.com'
+    ) {
+      return urlObj.searchParams.get('v');
+    }
   } catch (error) {
     console.error('Invalid YouTube URL:', error);
-    return null;
   }
+  return null;
 };
 
 /**
