@@ -1,16 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const EXPIRY_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 export default function PinGate({ onUnlock }) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
+  const inputRef = useRef(null);
 
   useEffect(() => {
     const session = JSON.parse(localStorage.getItem('steelsons-session'));
     if (session && Date.now() - session.timestamp < EXPIRY_MS) {
       onUnlock(session.access); // 'user' or 'admin'
     }
+    // Auto-focus the PIN input
+    if (inputRef.current) inputRef.current.focus();
   }, [onUnlock]);
 
   function handleSubmit(e) {
@@ -33,24 +36,27 @@ export default function PinGate({ onUnlock }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-900 bg-opacity-90 flex items-center justify-center z-50">
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-80 flex items-center justify-center px-4">
       <form
         onSubmit={handleSubmit}
-        className="bg-gray-800 text-white w-11/12 max-w-sm p-6 rounded-2xl shadow-xl flex flex-col items-center"
+        className="w-full max-w-sm bg-white dark:bg-gray-900 text-center rounded-xl p-6 shadow-lg"
       >
-        <h2 className="text-xl font-bold mb-4 tracking-wide text-yellow-400">Steel Sons Access</h2>
+        <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-900 dark:text-white">
+          Enter Access PIN
+        </h2>
 
         <input
+          ref={inputRef}
           type="password"
           value={pin}
           onChange={(e) => setPin(e.target.value)}
-          placeholder="Enter PIN"
-          className="w-full p-3 rounded-lg bg-gray-700 text-white text-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 mb-4"
+          placeholder="••••"
+          className="w-full text-center text-xl tracking-widest py-2 px-4 mb-4 rounded-md border border-gray-300 dark:border-gray-700 bg-transparent focus:outline-none focus:ring-2 focus:ring-yellow-400 dark:text-white placeholder-gray-400"
         />
 
         <button
           type="submit"
-          className="bg-yellow-400 text-black font-semibold px-6 py-2 rounded-lg hover:bg-yellow-300 transition"
+          className="w-full bg-yellow-400 hover:bg-yellow-300 text-black font-semibold py-2 rounded-md transition"
         >
           Unlock
         </button>
