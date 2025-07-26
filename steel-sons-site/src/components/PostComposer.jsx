@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { db } from '../lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 
@@ -23,42 +23,15 @@ export default function PostComposer({ onPost }) {
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
 
-  const pastedMediaRef = useRef(null);
-
-  const uploadPastedImage = async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', UPLOAD_PRESET);
-    try {
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.secure_url) {
-        pastedMediaRef.current = {
-          url: data.secure_url,
-          type: data.resource_type === 'video' ? 'video' : 'image',
-        };
-        setText((prev) => prev + '\n[image pasted]');
-      }
-    } catch (err) {
-      console.error('Paste upload failed:', err);
-      setError('Failed to upload pasted image');
-    }
-  };
-
-  const handlePaste = async (event) => {
+  const handlePaste = (event) => {
     const items = event.clipboardData?.items;
     if (!items) return;
+
     for (const item of items) {
       if (item.type.startsWith('image/')) {
-        event.preventDefault();
-        setUploading(true);
-        const file = item.getAsFile();
-        if (file) {
-          await uploadPastedImage(file);
-          setUploading(false);
+        const pastedFile = item.getAsFile();
+        if (pastedFile) {
+          setFile(pastedFile);
         }
       }
     }
@@ -135,7 +108,7 @@ export default function PostComposer({ onPost }) {
     };
 
     if (postType === 'general') {
-      if (!text.trim() && !file && !embedUrl.trim() && !pastedMediaRef.current) {
+      if (!text.trim() && !file && !embedUrl.trim()) {
         setError('Post must include text, media, or an embed');
         return;
       }
@@ -151,8 +124,6 @@ export default function PostComposer({ onPost }) {
           setUploading(false);
           return;
         }
-      } else if (pastedMediaRef.current) {
-        media = pastedMediaRef.current;
       }
 
       const embed = embedUrl.trim() ? parseEmbed(embedUrl.trim()) : null;
@@ -219,7 +190,6 @@ export default function PostComposer({ onPost }) {
     setPollQuestion('');
     setPollOptions(['', '']);
     setUploading(false);
-    pastedMediaRef.current = null;
     onPost?.();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
