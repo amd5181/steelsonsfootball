@@ -395,11 +395,7 @@ export default function PostCard({
       }
     }
 
-
     if (!type || !url) return null;
-
-    const url = embed.url;
-
     if (embed.type === 'youtube') {
       const videoId = extractYouTubeID(url);
       return videoId ? (
