@@ -385,15 +385,15 @@ export default function PostCard({
   const renderEmbed = () => {
     if (!embed) return null;
 
-    let type = embed.type;
-    let url = embed.url;
-    if (!type && url) {
-      const parsed = parseEmbedUrl(url);
-      if (parsed) {
-        type = parsed.type;
-        url = parsed.url;
-      }
+    let type, url;
+    const parsed = parseEmbedUrl(embed.url);
+    if (parsed) {
+      type = parsed.type;
+      url = parsed.url;
+    } else {
+      return null; // skip rendering if it can't be parsed
     }
+
 
     if (!type || !url) return null;
     if (embed.type === 'youtube') {
