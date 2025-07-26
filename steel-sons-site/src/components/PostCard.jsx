@@ -478,6 +478,11 @@ export default function PostCard({
       // Twitter embeds are handled by the twttr.widgets.load() script
       // We need to provide the blockquote element with the full tweet URL in the anchor tag
       console.log("renderEmbed - Rendering Twitter blockquote with URL:", url); // Log Twitter URL
+
+      // Force twitter.com domain for embed to improve reliability
+      const twitterDotComUrl = url.replace('x.com', 'twitter.com');
+      console.log("renderEmbed - Using twitter.com URL for embed:", twitterDotComUrl);
+
       return (
         <div className="mt-4">
           {twitterEmbedFailed ? (
@@ -491,7 +496,7 @@ export default function PostCard({
             <div id={`tweet-embed-${postId}`}> {/* Added unique ID for targeted loading */}
               <blockquote className="twitter-tweet" data-dnt="true" data-theme="light">
                 {/* The href must be the full, canonical tweet URL for the widget to work */}
-                <a href={url}></a>
+                <a href={twitterDotComUrl}></a> {/* Use the forced twitter.com URL here */}
               </blockquote>
             </div>
           )}
