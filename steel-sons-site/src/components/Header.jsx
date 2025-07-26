@@ -46,8 +46,24 @@ export default function Header({ access, onReset }) {
           </div>
 
           <ul className="space-y-3">
-            <li><a href="#" className="text-rose-500 font-medium">Feed</a></li>
-            <li><a href="#" className="text-rose-500 font-medium">League History</a></li>
+            <li>
+              <a
+                href="/"
+                className="text-rose-500 font-medium"
+                onClick={() => setMenuOpen(false)}
+              >
+                Feed
+              </a>
+            </li>
+            <li>
+              <a
+                href="/league-history"
+                className="text-rose-500 font-medium"
+                onClick={() => setMenuOpen(false)}
+              >
+                League History
+              </a>
+            </li>
             {access === 'admin' && (
               <li>
                 <button
