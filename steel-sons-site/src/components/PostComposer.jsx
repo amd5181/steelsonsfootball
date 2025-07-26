@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { db } from '../lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
+import { parseEmbedUrl } from '../utils/embedParser';
 
 const CLOUD_NAME = 'dsvpfi9te';
 const UPLOAD_PRESET = 'my_forum_uploads';
@@ -73,103 +74,6 @@ export default function PostComposer({ onPost }) {
     };
   };
 
-  const parseEmbed = (url) => {
-    try {
-      const u = new URL(url);
-      const hostname = u.hostname.toLowerCase();
-      const pathname = u.pathname;
-
-      // YouTube
-      if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
-        const id = u.searchParams.get('v') || pathname.split('/').pop();
-        if (id) {
-          return {
-            type: 'embed-video',
-            provider: 'youtube',
-            url: `https://www.youtube.com/embed/${id}`,
-          };
-        }
-      }
-
-      // Vimeo
-      if (hostname.includes('vimeo.com')) {
-        const id = pathname.split('/').filter(Boolean).pop();
-        return {
-          type: 'embed-video',
-          provider: 'vimeo',
-          url: `https://player.vimeo.com/video/${id}`,
-        };
-      }
-
-      // Giphy / Tenor (GIF embeds)
-      if (hostname.includes('giphy.com') || hostname.includes('tenor.com')) {
-        const gifId = pathname.split('/').filter(Boolean).pop();
-        if (gifId) {
-          return {
-            type: 'embed-image',
-            provider: hostname.includes('giphy') ? 'giphy' : 'tenor',
-            url: `https://media.giphy.com/media/${gifId}/giphy.gif`,
-          };
-        }
-      }
-
-      // Twitter / X
-      if (hostname.includes('twitter.com') || hostname.includes('x.com')) {
-        return {
-          type: 'embed-html',
-          provider: 'twitter',
-          url,
-        };
-      }
-
-      // Instagram
-      if (hostname.includes('instagram.com')) {
-        return {
-          type: 'embed-html',
-          provider: 'instagram',
-          url,
-        };
-      }
-
-      // TikTok
-      if (hostname.includes('tiktok.com')) {
-        return {
-          type: 'embed-html',
-          provider: 'tiktok',
-          url,
-        };
-      }
-
-      // Direct image
-      if (url.match(/\.(jpg|jpeg|png|webp|gif)$/i)) {
-        return {
-          type: 'embed-image',
-          provider: 'direct',
-          url,
-        };
-      }
-
-      // Direct video
-      if (url.match(/\.(mp4|webm|mov)$/i)) {
-        return {
-          type: 'embed-video',
-          provider: 'direct',
-          url,
-        };
-      }
-
-      // Fallback: generic
-      return {
-        type: 'embed-html',
-        provider: 'generic',
-        url,
-      };
-    } catch (err) {
-      console.error('Failed to parse embed URL:', err);
-      return null;
-    }
-  };
-
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -207,7 +111,7 @@ export default function PostComposer({ onPost }) {
         }
       }
 
-      const embed = embedUrl.trim() ? parseEmbed(embedUrl.trim()) : null;
+      const embed = embedUrl.trim() ? parseEmbedUrl(embedUrl.trim()) : null;
 
       payload = {
         ...payload,
