@@ -1,5 +1,9 @@
 {
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
+  "version": 2,
+  "builds": [
+    { "src": "steel-sons-site/package.json", "use": "@vercel/static-build", "config": { "distDir": "steel-sons-site/dist" } }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "/steel-sons-site/$1" }
   ]
 }
