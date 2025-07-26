@@ -609,8 +609,8 @@ export default function PostCard({
           <details className="relative">
             <summary className="cursor-pointer text-xl text-gray-400 hover:text-rose-500">⋮</summary>
             <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 shadow-md rounded-md p-2 text-sm z-50 space-y-2">
-              <button onClick={handleDeletePost} className="w-full text-left text-red-600 hover:underline">🗑 Delete Post</button>
-              <button onClick={handleResetReactions} className="w-full text-left hover:underline">♻ Reset Reactions</button>
+              <button onClick={handleDeletePost} className="w-full text-left text-red-600 hover:underline">Delete Post</button>
+              <button onClick={handleResetReactions} className="w-full text-left hover:underline">Reset Reactions</button>
             </div>
           </details>
         </div>
