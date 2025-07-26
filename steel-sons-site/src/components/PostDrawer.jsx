@@ -39,16 +39,15 @@ export default function PostDrawer({ open, onClose, onPost }) {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
       >
-        <div className="p-4 border-b flex justify-between items-center">
-          <h2 className="text-lg font-semibold">New Post</h2>
-          <button
-            onClick={onClose}
-            className="absolute top-2 right-2 text-3xl text-gray-600 hover:text-rose-500 focus:outline-none"
-            aria-label="Close"
-          >
-            &rarr;
-          </button>
-
+        <div className="relative p-4 border-b flex justify-between items-center">
+            <h2 className="text-lg font-semibold">New Post</h2>
+            <button
+                onClick={onClose}
+                className="absolute top-2 right-2 text-3xl text-gray-700 hover:text-red-500 focus:outline-none"
+                aria-label="Close"
+            >
+                &larr;
+            </button>
         </div>
 
         <div className="p-4 overflow-y-auto max-h-[calc(100%-4rem)]">
