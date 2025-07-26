@@ -384,61 +384,76 @@ export default function PostCard({
   const renderEmbed = () => {
     if (!embed?.type || !embed?.url) return null;
 
+    const url = embed.url;
+
     if (embed.type === 'youtube') {
-      const videoId = extractYouTubeID(embed.url);
-      if (!videoId) return null;
-      return (
+      const videoId = extractYouTubeID(url);
+      return videoId ? (
         <div className="mt-4">
           <iframe
             className="w-full aspect-video rounded-lg"
             src={`https://www.youtube.com/embed/${videoId}`}
             frameBorder="0"
             allowFullScreen
-            title="YouTube video player"
+            title="YouTube video"
           />
         </div>
-      );
+      ) : null;
     }
 
     if (embed.type === 'vimeo') {
-      const videoId = extractVimeoID(embed.url);
-      if (!videoId) return null;
-      return (
+      const videoId = extractVimeoID(url);
+      return videoId ? (
         <div className="mt-4">
           <iframe
             className="w-full aspect-video rounded-lg"
             src={`https://player.vimeo.com/video/${videoId}`}
             frameBorder="0"
             allowFullScreen
-            title="Vimeo video player"
+            title="Vimeo video"
           />
         </div>
-      );
+      ) : null;
     }
 
-    if (embed.type === 'giphy') {
+    if (embed.type === 'giphy' || embed.type === 'tenor') {
       return (
         <div className="mt-4">
           <iframe
-            src={embed.url}
-            className="w-full h-64 rounded-lg" // Giphy embeds often have fixed aspect ratios
+            src={url}
+            className="w-full h-64 rounded-lg"
             frameBorder="0"
             allowFullScreen
-            title="Giphy GIF"
+            title={`${embed.type} embed`}
           />
         </div>
       );
     }
 
     if (embed.type === 'twitter') {
-      // Note: For Twitter embeds to fully render, you typically need to load
-      // the Twitter widgets script globally or dynamically.
-      // <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
       return (
         <div className="mt-4">
           <blockquote className="twitter-tweet">
-            <a href={embed.url}></a>
+            <a href={url}></a>
           </blockquote>
+        </div>
+      );
+    }
+
+    if (embed.type === 'tiktok') {
+      return (
+        <div className="mt-4">
+          <blockquote className="tiktok-embed" cite={url} data-video-id="" style={{ maxWidth: '605px', margin: '0 auto' }}>
+            <a href={url}></a>
+          </blockquote>
+        </div>
+      );
+    }
+
+    if (embed.type === 'instagram') {
+      return (
+        <div className="mt-4">
+          <blockquote className="instagram-media" data-instgrm-permalink={url} data-instgrm-version="14" style={{ width: '100%', margin: '0 auto' }} />
         </div>
       );
     }
@@ -446,11 +461,7 @@ export default function PostCard({
     if (embed.type === 'image') {
       return (
         <div className="mt-4">
-          <img
-            src={embed.url}
-            alt="Embedded"
-            className="w-full rounded-lg object-cover"
-          />
+          <img src={url} alt="Embedded content" className="w-full rounded-lg object-cover" />
         </div>
       );
     }
@@ -458,25 +469,20 @@ export default function PostCard({
     if (embed.type === 'video') {
       return (
         <div className="mt-4">
-          <video
-            src={embed.url}
-            controls
-            className="w-full rounded-lg max-h-[500px]"
-            playsInline
-          />
+          <video src={url} controls className="w-full rounded-lg max-h-[500px]" playsInline />
         </div>
       );
     }
 
-    if (embed.type === 'unknown') {
-      return (
-        <div className="mt-4">
-          <a href={embed.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">
-            View Embedded Link
-          </a>
-        </div>
-      );
-    }
+    // Fallback to generic clickable link
+    return (
+      <div className="mt-4">
+        <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">
+          View Embedded Link
+        </a>
+      </div>
+    );
+  };
 
     return null;
   };
