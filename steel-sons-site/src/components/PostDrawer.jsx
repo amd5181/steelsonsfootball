@@ -1,63 +1,66 @@
-import React, { useRef } from 'react';
+// src/components/PostDrawer.jsx
+import React, { useEffect, useRef } from 'react';
 import PostComposer from './PostComposer';
+import { ChevronRight, X } from 'lucide-react';
 
 export default function PostDrawer({ open, onClose, onPost }) {
-  const startXRef = useRef(null);
+  const drawerRef = useRef();
 
-  const handleTouchStart = (e) => {
-    startXRef.current = e.touches[0].clientX;
-  };
-
-  const handleTouchMove = (e) => {
-    if (!startXRef.current) return;
-    const deltaX = e.touches[0].clientX - startXRef.current;
-
-    // Swipe right to close if horizontal movement is strong
-    if (deltaX > 75) {
-      onClose();
-      startXRef.current = null;
+  // Close on click outside
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (open && drawerRef.current && !drawerRef.current.contains(e.target)) {
+        onClose();
+      }
     }
-  };
+    function handleEscape(e) {
+      if (e.key === 'Escape') onClose();
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [open, onClose]);
 
   return (
     <div
-      className={`fixed inset-0 z-40 transition-all duration-300 ${
-        open ? 'visible' : 'invisible'
+      className={`fixed top-0 right-0 h-full w-full max-w-md z-50 transform transition-transform duration-300 ${
+        open ? 'translate-x-0' : 'translate-x-full'
       }`}
     >
       {/* Overlay */}
-      <div
-        className={`absolute inset-0 bg-black bg-opacity-30 transition-opacity ${
-          open ? 'opacity-100' : 'opacity-0'
-        }`}
-        onClick={onClose}
-      />
+      {open && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm z-40" />
+      )}
 
-      {/* Slide-in Panel */}
+      {/* Drawer */}
       <div
-        className={`absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl transform transition-transform duration-300 ${
-          open ? 'translate-x-0' : 'translate-x-full'
-        }`}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
+        ref={drawerRef}
+        className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-50 p-4 overflow-y-auto"
       >
-        <div className="p-4 border-b flex justify-between items-center">
-          <h2 className="text-lg font-semibold">New Post</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-xl leading-none"
-          >
-            ×
-          </button>
-        </div>
-        <div className="p-4 overflow-y-auto max-h-[calc(100%-4rem)]">
-          <PostComposer
-            onPost={() => {
-              onPost();
-              onClose();
-            }}
-          />
-        </div>
+        {/* Close X button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-500 hover:text-black"
+          aria-label="Close drawer"
+        >
+          <X size={20} />
+        </button>
+
+        {/* Pull Tab */}
+        <button
+          onClick={onClose}
+          className="absolute left-[-32px] top-1/2 transform -translate-y-1/2 bg-white border border-r-0 rounded-l-md shadow px-2 py-4 text-gray-600 hover:text-black"
+          aria-label="Close drawer"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-xl font-bold mb-4">New Post</h2>
+        <PostComposer onPost={onPost} />
       </div>
     </div>
   );
