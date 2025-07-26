@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { db } from '../lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 
@@ -22,6 +22,47 @@ export default function PostComposer({ onPost }) {
   // Poll
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
+
+  const pastedMediaRef = useRef(null);
+
+  const uploadPastedImage = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', UPLOAD_PRESET);
+    try {
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.secure_url) {
+        pastedMediaRef.current = {
+          url: data.secure_url,
+          type: data.resource_type === 'video' ? 'video' : 'image',
+        };
+        setText((prev) => prev + '\n[image pasted]');
+      }
+    } catch (err) {
+      console.error('Paste upload failed:', err);
+      setError('Failed to upload pasted image');
+    }
+  };
+
+  const handlePaste = async (event) => {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        event.preventDefault();
+        setUploading(true);
+        const file = item.getAsFile();
+        if (file) {
+          await uploadPastedImage(file);
+          setUploading(false);
+        }
+      }
+    }
+  };
 
   const handleUpload = async () => {
     const formData = new FormData();
@@ -94,7 +135,7 @@ export default function PostComposer({ onPost }) {
     };
 
     if (postType === 'general') {
-      if (!text.trim() && !file && !embedUrl.trim()) {
+      if (!text.trim() && !file && !embedUrl.trim() && !pastedMediaRef.current) {
         setError('Post must include text, media, or an embed');
         return;
       }
@@ -110,6 +151,8 @@ export default function PostComposer({ onPost }) {
           setUploading(false);
           return;
         }
+      } else if (pastedMediaRef.current) {
+        media = pastedMediaRef.current;
       }
 
       const embed = embedUrl.trim() ? parseEmbed(embedUrl.trim()) : null;
@@ -166,7 +209,6 @@ export default function PostComposer({ onPost }) {
       return;
     }
 
-    // Reset
     setName('');
     setText('');
     setFile(null);
@@ -177,6 +219,7 @@ export default function PostComposer({ onPost }) {
     setPollQuestion('');
     setPollOptions(['', '']);
     setUploading(false);
+    pastedMediaRef.current = null;
     onPost?.();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -221,6 +264,7 @@ export default function PostComposer({ onPost }) {
             placeholder="What's on your mind?"
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onPaste={handlePaste}
             className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
             rows={3}
           />
