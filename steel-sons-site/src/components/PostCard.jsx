@@ -385,7 +385,8 @@ export default function PostCard({
   const renderEmbed = () => {
     if (!embed) return null;
 
-    let { type, url } = embed;
+    let type = embed.type;
+    let url = embed.url;
     if (!type && url) {
       const parsed = parseEmbedUrl(url);
       if (parsed) {
@@ -393,6 +394,7 @@ export default function PostCard({
         url = parsed.url;
       }
     }
+
 
     if (!type || !url) return null;
 
