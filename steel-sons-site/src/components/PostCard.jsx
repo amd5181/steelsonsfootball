@@ -8,8 +8,8 @@ import {
   increment,
   onSnapshot, // Import onSnapshot for real-time updates
 } from 'firebase/firestore';
-import { initializeApp } from 'firebase/app';
-import { db } from '../lib/firebase';
+// import { initializeApp } from 'firebase/app'; // Not needed here as db is imported
+import { db } from '../lib/firebase'; // Assuming db is initialized elsewhere
 import { parseEmbedUrl } from '../utils/embedParser';
 
 
@@ -289,6 +289,29 @@ export default function PostCard({
     };
   }, [videoSource, videoType, mediaType, posterUrl, togglePlay]);
 
+  // NEW: Effect to handle Twitter widget loading
+  useEffect(() => {
+    if (embed?.type === 'twitter') {
+      // Check if twttr object exists, if not, load the script
+      if (typeof window.twttr === 'undefined') {
+        const script = document.createElement('script');
+        script.setAttribute('src', 'https://platform.twitter.com/widgets.js');
+        script.setAttribute('async', '');
+        script.setAttribute('charset', 'utf-8');
+        document.body.appendChild(script);
+        script.onload = () => {
+          // Once the script is loaded, load the widgets
+          if (window.twttr && window.twttr.widgets) {
+            window.twttr.widgets.load();
+          }
+        };
+      } else if (window.twttr && window.twttr.widgets) {
+        // If twttr is already loaded, just load the widgets to render new embeds
+        window.twttr.widgets.load();
+      }
+    }
+  }, [embed]); // Depend on the embed object to re-run when it changes
+
   /**
    * Handles user reaction to the post.
    * @param {string} emoji - The emoji character reacted with.
@@ -401,9 +424,9 @@ export default function PostCard({
       return null; // skip rendering if it can't be parsed
     }
 
-
     if (!type || !url) return null;
-    if (embed.type === 'youtube') {
+
+    if (type === 'youtube') {
       const videoId = extractYouTubeID(url);
       return videoId ? (
         <div className="mt-4">
@@ -418,7 +441,7 @@ export default function PostCard({
       ) : null;
     }
 
-    if (embed.type === 'vimeo') {
+    if (type === 'vimeo') {
       const videoId = extractVimeoID(url);
       return videoId ? (
         <div className="mt-4">
@@ -433,7 +456,7 @@ export default function PostCard({
       ) : null;
     }
 
-    if (embed.type === 'giphy' || embed.type === 'tenor') {
+    if (type === 'giphy' || type === 'tenor') {
       return (
         <div className="mt-4">
           <iframe
@@ -441,23 +464,25 @@ export default function PostCard({
             className="w-full h-64 rounded-lg"
             frameBorder="0"
             allowFullScreen
-            title={`${embed.type} embed`}
+            title={`${type} embed`}
           />
         </div>
       );
     }
 
-    if (embed.type === 'twitter') {
+    if (type === 'twitter') {
+      // Twitter embeds are handled by the twttr.widgets.load() script
+      // We just need to provide the blockquote element
       return (
         <div className="mt-4">
-          <blockquote className="twitter-tweet">
+          <blockquote className="twitter-tweet" data-dnt="true" data-theme="light">
             <a href={url}></a>
           </blockquote>
         </div>
       );
     }
 
-    if (embed.type === 'tiktok') {
+    if (type === 'tiktok') {
       return (
         <div className="mt-4">
           <blockquote className="tiktok-embed" cite={url} data-video-id="" style={{ maxWidth: '605px', margin: '0 auto' }}>
@@ -467,7 +492,7 @@ export default function PostCard({
       );
     }
 
-    if (embed.type === 'instagram') {
+    if (type === 'instagram') {
       return (
         <div className="mt-4">
           <blockquote className="instagram-media" data-instgrm-permalink={url} data-instgrm-version="14" style={{ width: '100%', margin: '0 auto' }} />
@@ -475,7 +500,7 @@ export default function PostCard({
       );
     }
 
-    if (embed.type === 'image') {
+    if (type === 'image') {
       return (
         <div className="mt-4">
           <img src={url} alt="Embedded content" className="w-full rounded-lg object-cover" />
@@ -483,7 +508,7 @@ export default function PostCard({
       );
     }
 
-    if (embed.type === 'video') {
+    if (type === 'video') {
       return (
         <div className="mt-4">
           <video src={url} controls className="w-full rounded-lg max-h-[500px]" playsInline />
