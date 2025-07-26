@@ -185,15 +185,26 @@ export default function PostComposer({ onPost }) {
     <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-4 max-w-2xl mx-auto mt-6 space-y-4">
       {error && <div className="text-red-500 text-sm">{error}</div>}
 
-      <select
-        value={postType}
-        onChange={(e) => setPostType(e.target.value)}
-        className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-      >
-        <option value="general">General Post</option>
-        <option value="trade">Trade Block</option>
-        <option value="poll">Poll</option>
-      </select>
+      <div className="flex justify-center space-x-2 border-b border-gray-200 mb-4">
+        {[
+          { label: 'General Post', value: 'general' },
+          { label: 'Trade Block', value: 'trade' },
+          { label: 'Poll', value: 'poll' },
+        ].map(({ label, value }) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setPostType(value)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-all duration-150 ${
+              postType === value
+                ? 'border-rose-500 text-rose-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       <input
         type="text"
