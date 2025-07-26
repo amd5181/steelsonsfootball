@@ -1,67 +1,52 @@
-// src/components/PostDrawer.jsx
-import React, { useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import PostComposer from './PostComposer';
-import { ChevronRight, X } from 'lucide-react';
 
-export default function PostDrawer({ open, onClose, onPost }) {
-  const drawerRef = useRef();
-
-  // Close on click outside
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (open && drawerRef.current && !drawerRef.current.contains(e.target)) {
-        onClose();
-      }
-    }
-    function handleEscape(e) {
-      if (e.key === 'Escape') onClose();
-    }
-
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [open, onClose]);
+export default function PostDrawer({ onPost }) {
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div
-      className={`fixed top-0 right-0 h-full w-full max-w-md z-50 transform transition-transform duration-300 ${
-        open ? 'translate-x-0' : 'translate-x-full'
-      }`}
-    >
-      {/* Overlay */}
-      {open && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm z-40" />
-      )}
-
-      {/* Drawer */}
-      <div
-        ref={drawerRef}
-        className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-50 p-4 overflow-y-auto"
-      >
-        {/* Close X button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-500 hover:text-black"
-          aria-label="Close drawer"
-        >
-          <X size={20} />
-        </button>
-
-        {/* Pull Tab */}
-        <button
-          onClick={onClose}
-          className="absolute left-[-32px] top-1/2 transform -translate-y-1/2 bg-white border border-r-0 rounded-l-md shadow px-2 py-4 text-gray-600 hover:text-black"
-          aria-label="Close drawer"
-        >
-          <ChevronRight className="w-5 h-5" />
-        </button>
-
-        <h2 className="text-xl font-bold mb-4">New Post</h2>
-        <PostComposer onPost={onPost} />
+    <>
+      <div className="fixed bottom-6 right-6 z-50">
+        {!isOpen && (
+          <button
+            onClick={() => setIsOpen(true)}
+            className="bg-rose-500 text-white px-4 py-2 rounded-full shadow hover:bg-rose-600 transition"
+          >
+            + New Post
+          </button>
+        )}
       </div>
-    </div>
+
+      <div
+        className={`fixed top-0 right-0 h-full w-full sm:w-[400px] bg-white shadow-lg transform transition-transform duration-300 z-40 ${
+          isOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        <div className="flex justify-between items-center p-4 border-b">
+          <h2 className="text-lg font-semibold">New Post</h2>
+          <button
+            onClick={() => setIsOpen(false)}
+            className="text-gray-600 text-2xl leading-none hover:text-gray-800"
+            aria-label="Close"
+          >
+            &rarr;
+          </button>
+        </div>
+        <div className="p-4 overflow-y-auto h-[calc(100%-60px)]">
+          <PostComposer onPost={() => {
+            setIsOpen(false);
+            onPost?.();
+          }} />
+        </div>
+      </div>
+
+      {/* Overlay */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-30 z-30"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+    </>
   );
 }
