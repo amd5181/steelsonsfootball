@@ -1,43 +1,40 @@
-// src/utils/embedParser.js
-export const parseEmbedUrl = (url) => {
-  if (!url) return null;
-
-  url = url.trim();
-
+// utils/embedParser.js
+export function parseEmbedUrl(url) {
   try {
     const parsed = new URL(url);
-    const hostname = parsed.hostname.toLowerCase();
+    const hostname = parsed.hostname.replace(/^www\./, '').toLowerCase();
 
-    if (hostname.includes('youtube.com') || hostname.includes('youtu.be'))
+    if (hostname === 'youtube.com' || hostname === 'youtu.be') {
       return { type: 'youtube', url };
-
-    if (hostname.includes('vimeo.com'))
+    }
+    if (hostname === 'vimeo.com') {
       return { type: 'vimeo', url };
-
-    if (hostname.includes('giphy.com'))
+    }
+    if (hostname === 'giphy.com') {
       return { type: 'giphy', url };
-
-    if (hostname.includes('tenor.com'))
+    }
+    if (hostname === 'tenor.com') {
       return { type: 'tenor', url };
-
-    if (hostname.includes('twitter.com') || hostname.includes('x.com'))
+    }
+    if (hostname === 'twitter.com' || hostname === 'x.com') {
       return { type: 'twitter', url };
-
-    if (hostname.includes('tiktok.com'))
+    }
+    if (hostname.includes('tiktok.com')) {
       return { type: 'tiktok', url };
-
-    if (hostname.includes('instagram.com'))
+    }
+    if (hostname.includes('instagram.com')) {
       return { type: 'instagram', url };
-
-    if (/\.(jpg|jpeg|png|gif|webp)$/i.test(parsed.pathname))
+    }
+    if (/\.(jpeg|jpg|gif|png|webp)$/i.test(url)) {
       return { type: 'image', url };
-
-    if (/\.(mp4|mov|webm)$/i.test(parsed.pathname))
+    }
+    if (/\.(mp4|mov|webm)$/i.test(url)) {
       return { type: 'video', url };
+    }
 
     return { type: 'link', url };
-  } catch (err) {
-    console.warn('Invalid embed URL:', err);
+  } catch (error) {
+    console.error('Failed to parse embed URL:', error);
     return null;
   }
-};
+}
