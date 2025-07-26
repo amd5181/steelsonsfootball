@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import PinGate from './components/PinGate';
 import Header from './components/Header';
 import Feed from './components/Feed';
-import LeagueHistory from './components/LeagueHistory';
+import LeagueHistory from '../Pages/LeagueHistory';
 
 function App() {
   const [access, setAccess] = useState(null); // 'user' | 'admin' | null
