@@ -63,6 +63,16 @@ export default function Header({ access, onReset }) {
                 League History
               </Link>
             </li>
+            {/* New link for Record Book */}
+            <li>
+              <Link
+                to="/record-book"
+                className="text-rose-500 font-medium"
+                onClick={() => setMenuOpen(false)}
+              >
+                Record Book
+              </Link>
+            </li>
             {access === 'admin' && (
               <li>
                 <button

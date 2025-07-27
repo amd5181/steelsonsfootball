@@ -252,7 +252,7 @@ export default function PostComposer({ onPost }) {
           />
           <input
             type="url"
-            placeholder="Embed a URL (YouTube, Giphy, X/Twitter)"
+            placeholder="Embed a URL (Instagram, Twitter, Youtube, URL)"
             value={embedUrl}
             onChange={(e) => setEmbedUrl(e.target.value)}
             className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
