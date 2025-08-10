@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
@@ -18,6 +17,9 @@ let currentPlayingPlayerInfo = null;
 // Initial emoji set for reactions
 const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 };
 
+// Time in milliseconds for the guest delete window (15 minutes)
+const GUEST_DELETE_WINDOW = 15 * 60 * 1000;
+
 /**
  * Formats a timestamp into a localized date and time string.
  * @param {number} timestamp - The timestamp to format.
@@ -30,19 +32,6 @@ function formatDate(timestamp) {
     timeStyle: 'short',
   });
 }
-
-/**
- * Helper function to get or create a unique client ID for the device.
- * @returns {string} The unique client ID.
- */
-const getClientId = () => {
-  let clientId = localStorage.getItem('clientId');
-  if (!clientId) {
-    clientId = crypto.randomUUID();
-    localStorage.setItem('clientId', clientId);
-  }
-  return clientId;
-};
 
 /**
  * PostCard component to display various types of posts (general, trade, poll)
@@ -85,11 +74,8 @@ export default function PostCard({
   const [isLoading, setIsLoading] = useState(true);
   const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false);
   const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false);
-  const [posterClientId, setPosterClientId] = useState(null);
   const [showAdminDropdown, setShowAdminDropdown] = useState(false);
   const adminDropdownRef = useRef(null);
-
-  const currentClientId = getClientId();
 
   const postRef = doc(db, 'posts', postId);
 
@@ -113,7 +99,6 @@ export default function PostCard({
       if (snap.exists()) {
         const data = snap.data();
         setPostType(data.type || 'general');
-        setPosterClientId(data.clientId || null);
 
         if (data.type === 'trade') {
           setTradeData({
@@ -413,6 +398,9 @@ export default function PostCard({
     }
   };
 
+  // Determine if the delete button should be visible for a guest
+  const canGuestDelete = name === 'Guest' && (Date.now() - createdAt) <= GUEST_DELETE_WINDOW;
+
   const renderEmbed = () => {
     if (!embed) return null;
 
@@ -603,6 +591,7 @@ export default function PostCard({
             </div>
           )}
 
+          {/* Conditional rendering for delete options with proper spacing */}
           {access === 'admin' ? (
             // Admin dropdown menu
             <div className="relative" ref={adminDropdownRef}>
@@ -636,8 +625,8 @@ export default function PostCard({
                 </div>
               )}
             </div>
-          ) : posterClientId === currentClientId && (
-            // Regular user delete icon
+          ) : canGuestDelete && (
+            // Regular user delete icon (only visible for 15 mins)
             <button
               onClick={handleDeletePost}
               className="p-1 text-gray-400 hover:text-red-500 transition-colors"
