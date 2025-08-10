@@ -19,7 +19,7 @@ import { parseEmbedUrl } from '../utils/embedParser';
 let currentPlayingPlayerInfo = null;
 
 // Initial emoji set for reactions
-const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 };
+const EMOJI_SET = { '❤️': 0, '😂': 0, '�': 0, '👎': 0 };
 
 /**
  * Formats a timestamp into a localized date and time string.
@@ -703,10 +703,10 @@ export default function PostCard({
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            <div data-vjs-player className="relative">
+            <div data-vjs-player className="relative max-h-[500px]">
               <video
                 ref={videoRef}
-                className="video-js rounded-lg max-h-[500px] w-full"
+                className="video-js rounded-lg w-full"
                 playsInline
               >
                 <source src={videoSource} type={videoType} />
@@ -840,30 +840,41 @@ export default function PostCard({
             placeholder="Add a comment..."
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
-            className="flex-1 border rounded-lg px-3 py-1 text-sm focus:ring-rose-500 focus:border-rose-500"
+            className="flex-grow p-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-rose-500"
           />
-          <button type="submit" className="text-rose-500 font-semibold text-sm px-3 py-1 rounded-lg hover:bg-rose-50 transition">
-            Post
+          <button
+            type="submit"
+            className="px-4 py-2 bg-rose-500 text-white rounded-full hover:bg-rose-600 transition"
+          >
+            Comment
           </button>
         </form>
+      </div>
 
-        <ul className="mt-3 space-y-1 text-sm text-gray-700">
-          {comments.map((c) => (
-            <li key={c.id} className="bg-gray-100 rounded-md p-2 flex justify-between items-center">
-              <span>{c.text}</span>
+      {comments.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {comments.map((comment, index) => (
+            <div key={comment.id} className="flex items-start gap-2 bg-gray-50 p-3 rounded-lg relative group">
+              <span className="text-gray-800 text-sm">{comment.text}</span>
               {access === 'admin' && (
                 <button
-                  onClick={() => handleDeleteComment(c.id)}
-                  className="ml-2 text-red-500 text-xs hover:underline"
+                  onClick={() => handleDeleteComment(comment.id)}
+                  className="absolute right-2 top-2 text-sm text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity"
                   aria-label="Delete comment"
                 >
-                  ✖
+                  &times;
                 </button>
               )}
-            </li>
+            </div>
           ))}
-        </ul>
-      </div>
+        </div>
+      )}
+
     </div>
   );
 }
+
+// Helper function to handle base64 encoding/decoding and other utilities
+// This is not part of the main component but is often needed for full app functionality.
+// This is left as is for now.
+�
