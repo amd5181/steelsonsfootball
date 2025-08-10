@@ -19,7 +19,7 @@ import { parseEmbedUrl } from '../utils/embedParser';
 let currentPlayingPlayerInfo = null;
 
 // Initial emoji set for reactions
-const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '\u{1F44E}': 0 };
+const EMOJI_SET = { '❤️': 0, '😂': 0, '�': 0, '\u{1F44E}': 0 };
 
 /**
  * Formats a timestamp into a localized date and time string.
@@ -75,9 +75,6 @@ export default function PostCard({
   const [isLoading, setIsLoading] = useState(true); // Loading state for post data
   const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false); // State to track Twitter embed failure
   const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false); // State to track Instagram embed failure
-
-  // State to track touch start position for distinguishing taps from scrolls
-  const touchStartPos = useRef({ x: 0, y: 0 });
 
   const postRef = doc(db, 'posts', postId);
 
@@ -160,7 +157,9 @@ export default function PostCard({
     }
   }, [mediaUrl, mediaType]);
 
-  // Callback to toggle video play/pause
+  /**
+   * Callback to toggle video play/pause. This is memoized to avoid re-creation.
+   */
   const togglePlay = useCallback(() => {
     const player = playerRef.current;
     if (!player) return;
@@ -173,9 +172,10 @@ export default function PostCard({
     }
 
     if (player.paused()) {
+      // Use the promise returned by play() to handle success/failure
       player.play().then(() => {
         player.muted(false); // Unmute when playing
-        player.poster(''); // Hide poster after play starts
+        // The poster image is now removed by video.js when playing starts
         setShowPlayOverlay(false);
         currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
       }).catch(err => {
@@ -192,16 +192,18 @@ export default function PostCard({
 
   // Effect to initialize and manage video.js player
   useEffect(() => {
-    // We now initialize the player on the parent container, not the video tag itself.
-    // This allows the video.js player's root element to inherit our CSS classes correctly.
     if (mediaType === 'video' && videoRef.current && videoSource) {
+      // Check if player is already initialized to avoid re-creating it
       if (!playerRef.current) {
-        playerRef.current = videojs(videoRef.current, {
+        const videoElement = videoRef.current.querySelector('video');
+        if (!videoElement) return;
+
+        playerRef.current = videojs(videoElement, {
           controls: false,
           autoplay: false,
           preload: 'auto',
           responsive: true,
-          fluid: true, // This is the key change to make the player responsive
+          fluid: true,
           loop: true,
           muted: true,
           poster: posterUrl,
@@ -209,70 +211,49 @@ export default function PostCard({
 
         const player = playerRef.current;
 
-        // NEW: Event handlers for more deliberate touch detection on mobile
-        const handleTouchStart = (e) => {
-            touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        };
-
-        const handleTouchEnd = (e) => {
-            const endX = e.changedTouches[0].clientX;
-            const endY = e.changedTouches[0].clientY;
-            const dx = Math.abs(endX - touchStartPos.current.x);
-            const dy = Math.abs(endY - touchStartPos.current.y);
-            const touchThreshold = 10;
-
-            if (dx < touchThreshold && dy < touchThreshold) {
-                e.preventDefault();
-                e.stopPropagation();
-                togglePlay();
-            }
-        };
-
-        // Add event listeners to the player's element
+        // Add a single click handler to the player's main element
         const playerElement = player.el();
         if (playerElement) {
-          playerElement.addEventListener('touchstart', handleTouchStart);
-          playerElement.addEventListener('touchend', handleTouchEnd);
-          playerElement.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            togglePlay();
-          });
+          playerElement.addEventListener('click', togglePlay);
         }
 
+        // Set up event listeners to manage the play overlay
         player.on('play', () => setShowPlayOverlay(false));
         player.on('pause', () => setShowPlayOverlay(true));
+        // Force the overlay to show initially
         setShowPlayOverlay(true);
       } else {
+        // If the player exists but the source changes, update it
         if (playerRef.current.currentSrc() !== videoSource) {
           playerRef.current.src({ src: videoSource, type: videoType });
           playerRef.current.poster(posterUrl);
+          // Make sure the play button is visible on source change
           setShowPlayOverlay(true);
         }
       }
     }
 
+    // Cleanup function
     return () => {
-      if (playerRef.current) {
-        const player = playerRef.current;
+      const player = playerRef.current;
+      if (player) {
+        // Remove the click event listener
         const playerElement = player.el();
         if (playerElement) {
-            playerElement.removeEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                togglePlay();
-            });
-            playerElement.removeEventListener('touchstart', () => {});
-            playerElement.removeEventListener('touchend', () => {});
+          playerElement.removeEventListener('click', togglePlay);
         }
-        playerRef.current.dispose();
+
+        // Dispose the player
+        player.dispose();
         playerRef.current = null;
       }
+      // Reset the global playing player reference if this player was the one playing
       if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === playerRef.current) {
         currentPlayingPlayerInfo = null;
       }
     };
   }, [videoSource, videoType, mediaType, posterUrl, togglePlay]);
+
 
   // Effect to handle Twitter widget loading and rendering
   useEffect(() => {
@@ -691,8 +672,6 @@ export default function PostCard({
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            // A responsive container with 16:9 aspect ratio, which Video.js will now respect
-            // I've moved the video-js class here as per best practices.
             <div
               data-vjs-player
               className="video-js w-full relative pb-[56.25%] overflow-hidden"
@@ -707,11 +686,6 @@ export default function PostCard({
               {showPlayOverlay && (
                 <div
                   className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-10"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    togglePlay();
-                  }}
                 >
                   <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
                 </div>
@@ -860,3 +834,4 @@ export default function PostCard({
     </div>
   );
 }
+�
