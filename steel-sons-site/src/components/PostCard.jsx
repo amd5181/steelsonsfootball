@@ -742,7 +742,7 @@ export default function PostCard({
                   </button>
                 )}
               </div>
-
+            </div>
           ) : (
             mediaType === 'image' && (
               <img
