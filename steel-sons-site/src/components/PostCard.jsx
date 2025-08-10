@@ -19,7 +19,7 @@ import { parseEmbedUrl } from '../utils/embedParser';
 let currentPlayingPlayerInfo = null;
 
 // Initial emoji set for reactions
-const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 };
+const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '�': 0 };
 
 /**
  * Formats a timestamp into a localized date and time string.
@@ -75,6 +75,9 @@ export default function PostCard({
   const [isLoading, setIsLoading] = useState(true); // Loading state for post data
   const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false); // State to track Twitter embed failure
   const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false); // State to track Instagram embed failure
+
+  // NEW: State to track touch start position for distinguishing taps from scrolls
+  const touchStartPos = useRef({ x: 0, y: 0 });
 
   const postRef = doc(db, 'posts', postId);
 
@@ -206,17 +209,42 @@ export default function PostCard({
         const player = playerRef.current;
         const videoElement = player.el().querySelector('video');
 
-        // Event handler for video interaction (click/touch)
-        const handleInteraction = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          togglePlay();
+        // NEW: Event handlers for more deliberate touch detection on mobile
+        const handleTouchStart = (e) => {
+            // Store the initial touch position
+            touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        };
+
+        const handleTouchEnd = (e) => {
+            // Get the final touch position
+            const endX = e.changedTouches[0].clientX;
+            const endY = e.changedTouches[0].clientY;
+            // Calculate the distance moved
+            const dx = Math.abs(endX - touchStartPos.current.x);
+            const dy = Math.abs(endY - touchStartPos.current.y);
+
+            // Define a small threshold to distinguish a tap from a scroll
+            const touchThreshold = 10; // in pixels
+
+            if (dx < touchThreshold && dy < touchThreshold) {
+                // If the movement was minimal, treat it as a deliberate tap
+                e.preventDefault();
+                e.stopPropagation();
+                togglePlay();
+            }
         };
 
         // Add event listeners to the video element
         if (videoElement) {
-          videoElement.addEventListener('click', handleInteraction);
-          videoElement.addEventListener('touchend', handleInteraction);
+          // Add touch event listeners to the video element itself
+          videoElement.addEventListener('touchstart', handleTouchStart);
+          videoElement.addEventListener('touchend', handleTouchEnd);
+          // Keep the click listener for desktop users
+          videoElement.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            togglePlay();
+          });
         }
 
         // Update overlay state based on player events
@@ -239,13 +267,14 @@ export default function PostCard({
         const player = playerRef.current;
         const videoElement = player.el().querySelector('video');
         if (videoElement) {
-          const handleInteraction = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            togglePlay();
-          };
-          videoElement.removeEventListener('click', handleInteraction);
-          videoElement.removeEventListener('touchend', handleInteraction);
+            // Remove event listeners
+            videoElement.removeEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                togglePlay();
+            });
+            videoElement.removeEventListener('touchstart', () => {});
+            videoElement.removeEventListener('touchend', () => {});
         }
         playerRef.current.dispose(); // Dispose of the video.js player
         playerRef.current = null;
@@ -838,3 +867,4 @@ export default function PostCard({
     </div>
   );
 }
+�
