@@ -706,7 +706,7 @@ export default function PostCard({
           {mediaType === 'video' && videoSource ? (
             <div
               className={`relative w-full transition-[max-height] duration-300 ease-out
-                ${showPlayOverlay ? 'max-h-[45svh]' : 'max-h-[88svh]'} md:max-h-[500px]`}
+                ${showPlayOverlay ? 'max-h-[85svh]' : 'max-h-[85svh]'} md:max-h-[700px]`}
             >
               {/* Let video.js handle fluid sizing; we just cap the container height */}
               <div data-vjs-player className="w-full">
