@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-
 const EXPIRY_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 export default function PinGate({ onUnlock }) {
