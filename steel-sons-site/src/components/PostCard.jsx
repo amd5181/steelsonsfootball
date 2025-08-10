@@ -196,7 +196,9 @@ export default function PostCard({
   }, [posterUrl]);
 
   useEffect(() => {
+    // Check if the component has a video, a ref, and a valid source
     if (mediaType === 'video' && videoRef.current && videoSource) {
+      // If the player doesn't exist, create it.
       if (!playerRef.current) {
         playerRef.current = videojs(videoRef.current, {
           controls: false,
@@ -209,6 +211,7 @@ export default function PostCard({
           poster: posterUrl,
         });
 
+        // Add event listeners for play/pause and interaction
         const player = playerRef.current;
         const videoElement = player.el().querySelector('video');
 
@@ -226,51 +229,31 @@ export default function PostCard({
         player.on('play', () => setShowPlayOverlay(false));
         player.on('pause', () => setShowPlayOverlay(true));
         setShowPlayOverlay(true);
+
       } else {
-        // If the source changes, dispose and re-initialize the player
-        if (playerRef.current.currentSrc() !== videoSource) {
-          playerRef.current.dispose();
-          playerRef.current = null;
-          playerRef.current = videojs(videoRef.current, {
-            controls: false,
-            autoplay: false,
-            preload: 'auto',
-            responsive: true,
-            fill: true,
-            loop: true,
-            muted: true,
-            poster: posterUrl,
-          });
-
-          const player = playerRef.current;
-          const videoElement = player.el().querySelector('video');
-
-          const handleInteraction = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            togglePlay();
-          };
-          if (videoElement) {
-            videoElement.addEventListener('click', handleInteraction);
-            videoElement.addEventListener('touchend', handleInteraction);
-          }
-          player.on('play', () => setShowPlayOverlay(false));
-          player.on('pause', () => setShowPlayOverlay(true));
-        }
+        // If the player already exists, simply update its source
+        playerRef.current.src({
+          src: videoSource,
+          type: videoType,
+        });
+        playerRef.current.poster(posterUrl);
       }
     }
 
+    // Cleanup function
     return () => {
       if (playerRef.current) {
+        // Remove event listeners before disposing
         const player = playerRef.current;
         const videoElement = player.el().querySelector('video');
         if (videoElement) {
           videoElement.removeEventListener('click', () => {});
           videoElement.removeEventListener('touchend', () => {});
         }
-        playerRef.current.dispose();
+        player.dispose(); // Dispose of the player
         playerRef.current = null;
       }
+      // Clean up global state if this was the playing video
       if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === playerRef.current) {
         currentPlayingPlayerInfo = null;
       }
