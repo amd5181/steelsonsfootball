@@ -9,11 +9,9 @@ import {
   increment,
   onSnapshot, // Import onSnapshot for real-time updates
 } from 'firebase/firestore';
-// Assuming db is initialized elsewhere, e.g., in a separate firebase.js
-// import { initializeApp } from 'firebase/app'; // Not needed here as db is imported
 import { db } from '../lib/firebase'; // Assuming db is initialized elsewhere
 import { parseEmbedUrl } from '../utils/embedParser';
-import { v4 as uuidv4 } from 'uuid'; // Import uuid to create unique IDs
+// The 'uuid' import has been removed as we are now using a native browser function.
 import { Trash2 } from 'lucide-react'; // Import the trash icon for deletion
 
 // Global variable to track the currently playing video.
@@ -39,12 +37,14 @@ function formatDate(timestamp) {
 /**
  * Helper function to get or create a unique client ID for the device.
  * This ID is used to determine if the user is the original poster.
+ * We now use the native crypto.randomUUID() instead of the uuid package.
  * @returns {string} The unique client ID.
  */
 const getClientId = () => {
   let clientId = localStorage.getItem('clientId');
   if (!clientId) {
-    clientId = uuidv4();
+    // Using native crypto API for UUID generation, eliminating the need for the 'uuid' package.
+    clientId = crypto.randomUUID();
     localStorage.setItem('clientId', clientId);
   }
   return clientId;
@@ -61,7 +61,6 @@ const getClientId = () => {
  * @param {string} props.mediaType - Type of the attached media ('image' or 'video').
  * @param {string} props.postId - The ID of the post in Firestore.
  * @param {string} props.access - User's access level ('admin' or 'user').
-
  * @param {function} props.onUpdate - Callback function for post updates (e.g., after deletion).
  */
 export default function PostCard({
@@ -92,13 +91,13 @@ export default function PostCard({
   const [isLoading, setIsLoading] = useState(true); // Loading state for post data
   const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false); // State to track Twitter embed failure
   const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false); // State to track Instagram embed failure
-  // NEW: State to track the client ID of the user who posted this message
+  // State to track the client ID of the user who posted this message
   const [posterClientId, setPosterClientId] = useState(null);
 
-  // NEW: Get the current user's client ID from local storage
+  // Get the current user's client ID from local storage
   const currentClientId = getClientId();
 
-  // NEW: State to track touch start position for distinguishing taps from scrolls
+  // State to track touch start position for distinguishing taps from scrolls
   const touchStartPos = useRef({ x: 0, y: 0 });
 
   const postRef = doc(db, 'posts', postId);
@@ -110,7 +109,7 @@ export default function PostCard({
       if (snap.exists()) {
         const data = snap.data();
         setPostType(data.type || 'general');
-        setPosterClientId(data.clientId || null); // NEW: Get the poster's client ID from Firestore
+        setPosterClientId(data.clientId || null); // Get the poster's client ID from Firestore
 
         if (data.type === 'trade') {
           setTradeData({
@@ -232,7 +231,7 @@ export default function PostCard({
         const player = playerRef.current;
         const videoElement = player.el().querySelector('video');
 
-        // NEW: Event handlers for more deliberate touch detection on mobile
+        // Event handlers for more deliberate touch detection on mobile
         const handleTouchStart = (e) => {
             // Store the initial touch position
             touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -356,7 +355,7 @@ export default function PostCard({
     }
   }, [embed, postId]);
 
-  // NEW: Effect to handle Instagram widget loading and rendering
+  // Effect to handle Instagram widget loading and rendering
   useEffect(() => {
     if (embed?.type === 'instagram') {
       const loadInstagramWidgets = () => {
@@ -396,7 +395,6 @@ export default function PostCard({
           setInstagramEmbedFailed(true);
         };
       } else {
-        console.log("Instagram Embed - embed.js script already loaded, attempting to process widgets.");
         loadInstagramWidgets();
       }
     }
@@ -698,7 +696,7 @@ export default function PostCard({
         </div>
       )}
 
-      {/* NEW: Conditional rendering for the delete button */}
+      {/* Conditional rendering for the delete button */}
       {(access === 'admin' || posterClientId === currentClientId) && (
         <div className="absolute top-3 right-3 z-10">
           <button
@@ -893,7 +891,7 @@ export default function PostCard({
           {comments.map((c) => (
             <li key={c.id} className="bg-gray-100 rounded-md p-2 flex justify-between items-center">
               <span>{c.text}</span>
-              {/* NEW: Conditional comment deletion - only visible to admins */}
+              {/* Conditional comment deletion - only visible to admins */}
               {access === 'admin' && (
                 <button
                   onClick={() => handleDeleteComment(c.id)}
