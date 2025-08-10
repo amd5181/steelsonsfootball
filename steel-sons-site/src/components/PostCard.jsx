@@ -131,29 +131,12 @@ export default function PostCard({
   // Effect to handle video source and type detection
   useEffect(() => {
     if (mediaType === 'video' && mediaUrl) {
-      const basePath = mediaUrl.split('/upload/')[1]?.replace(/\.(mp4|mov)$/i, '');
-      const hlsUrl = `https://res.cloudinary.com/dsvpfi9te/video/upload/sp_auto/${basePath}.m3u8`;
-      const poster = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
-
+      // For simplicity and stability, we will directly use the provided MP4 URL.
+      // HLS logic is removed to avoid potential Cloudinary processing delays or errors.
+      const poster = mediaUrl.replace(/\.(mp4|mov|mkv)$/i, '.jpg') + "?so_0";
       setPosterUrl(poster);
-
-      // Check for HLS availability first
-      fetch(hlsUrl, { method: 'HEAD' })
-        .then(res => {
-          if (res.ok) {
-            setVideoSource(hlsUrl);
-            setVideoType('application/x-mpegURL');
-          } else {
-            // Fallback to original MP4 if HLS is not available
-            setVideoSource(mediaUrl);
-            setVideoType('video/mp4');
-          }
-        })
-        .catch(error => {
-          console.error('Error checking HLS source, falling back to MP4:', error);
-          setVideoSource(mediaUrl);
-          setVideoType('video/mp4');
-        });
+      setVideoSource(mediaUrl);
+      setVideoType('video/mp4');
     }
   }, [mediaUrl, mediaType]);
 
@@ -175,7 +158,6 @@ export default function PostCard({
       // Use the promise returned by play() to handle success/failure
       player.play().then(() => {
         player.muted(false); // Unmute when playing
-        // The poster image is now removed by video.js when playing starts
         setShowPlayOverlay(false);
         currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
       }).catch(err => {
@@ -193,66 +175,53 @@ export default function PostCard({
   // Effect to initialize and manage video.js player
   useEffect(() => {
     if (mediaType === 'video' && videoRef.current && videoSource) {
-      // Check if player is already initialized to avoid re-creating it
-      if (!playerRef.current) {
-        const videoElement = videoRef.current.querySelector('video');
-        if (!videoElement) return;
-
-        playerRef.current = videojs(videoElement, {
-          controls: false,
-          autoplay: false,
-          preload: 'auto',
-          responsive: true,
-          fluid: true,
-          loop: true,
-          muted: true,
-          poster: posterUrl,
-        });
-
-        const player = playerRef.current;
-
-        // Add a single click handler to the player's main element
-        const playerElement = player.el();
-        if (playerElement) {
-          playerElement.addEventListener('click', togglePlay);
-        }
-
-        // Set up event listeners to manage the play overlay
-        player.on('play', () => setShowPlayOverlay(false));
-        player.on('pause', () => setShowPlayOverlay(true));
-        // Force the overlay to show initially
-        setShowPlayOverlay(true);
-      } else {
-        // If the player exists but the source changes, update it
-        if (playerRef.current.currentSrc() !== videoSource) {
-          playerRef.current.src({ src: videoSource, type: videoType });
-          playerRef.current.poster(posterUrl);
-          // Make sure the play button is visible on source change
-          setShowPlayOverlay(true);
-        }
+      // Ensure player is not already initialized before creating a new one
+      if (playerRef.current) {
+        playerRef.current.dispose();
       }
-    }
 
-    // Cleanup function
-    return () => {
-      const player = playerRef.current;
-      if (player) {
-        // Remove the click event listener
-        const playerElement = player.el();
-        if (playerElement) {
-          playerElement.removeEventListener('click', togglePlay);
+      // Check if the video element is available in the DOM
+      const videoElement = videoRef.current;
+      if (!videoElement) {
+        console.error("Video element not found for video.js initialization.");
+        return;
+      }
+
+      const player = playerRef.current = videojs(videoElement, {
+        controls: false,
+        autoplay: false,
+        preload: 'auto',
+        responsive: true,
+        fluid: true,
+        loop: true,
+        muted: true,
+        poster: posterUrl,
+      });
+
+      // Add event listeners to the player
+      player.on('play', () => setShowPlayOverlay(false));
+      player.on('pause', () => setShowPlayOverlay(true));
+
+      // Cleanup function to dispose of the player
+      return () => {
+        if (playerRef.current) {
+          playerRef.current.dispose();
+          playerRef.current = null;
+          // Reset the global playing player reference if this player was the one playing
+          if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === player) {
+            currentPlayingPlayerInfo = null;
+          }
         }
-
-        // Dispose the player
-        player.dispose();
+      };
+    }
+    // Cleanup function for when the component unmounts or dependencies change
+    return () => {
+      if (playerRef.current) {
+        playerRef.current.dispose();
         playerRef.current = null;
       }
-      // Reset the global playing player reference if this player was the one playing
-      if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === playerRef.current) {
-        currentPlayingPlayerInfo = null;
-      }
     };
-  }, [videoSource, videoType, mediaType, posterUrl, togglePlay]);
+  }, [mediaType, videoSource, posterUrl]);
 
 
   // Effect to handle Twitter widget loading and rendering
@@ -672,19 +641,21 @@ export default function PostCard({
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            <div
-              data-vjs-player
-              className="video-js w-full relative pb-[56.25%] overflow-hidden"
-              ref={videoRef}
-            >
+            <div className="video-js-container w-full relative pb-[56.25%] overflow-hidden">
               <video
-                className="vjs-tech w-full h-full absolute inset-0 object-cover"
+                ref={videoRef}
+                className="video-js vjs-default-skin w-full h-full absolute inset-0 object-cover"
                 playsInline
               >
                 <source src={videoSource} type={videoType} />
+                <p className="vjs-no-js">
+                  To view this video please enable JavaScript, and consider upgrading to a
+                  web browser that <a href="https://videojs.com/html5-video-support/" target="_blank" rel="noopener noreferrer">supports HTML5 video</a>
+                </p>
               </video>
               {showPlayOverlay && (
                 <div
+                  onClick={togglePlay}
                   className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-10"
                 >
                   <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
