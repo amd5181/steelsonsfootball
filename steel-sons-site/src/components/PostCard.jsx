@@ -6,16 +6,12 @@ import {
   updateDoc,
   deleteDoc,
   increment,
-  onSnapshot, // Import onSnapshot for real-time updates
+  onSnapshot,
 } from 'firebase/firestore';
-// Assuming db is initialized elsewhere, e.g., in a separate firebase.js
-// import { initializeApp } from 'firebase/app'; // Not needed here as db is imported
-import { db } from '../lib/firebase'; // Assuming db is initialized elsewhere
+import { db } from '../lib/firebase';
 import { parseEmbedUrl } from '../utils/embedParser';
 
-
 // Global variable to track the currently playing video.
-// For a more robust solution in a larger app, consider using React Context API.
 let currentPlayingPlayerInfo = null;
 
 // Initial emoji set for reactions
@@ -59,6 +55,7 @@ export default function PostCard({
 }) {
   const videoRef = useRef(null);
   const playerRef = useRef(null);
+  const handlerRef = useRef(null); // stable tap handler reference
   const [videoSource, setVideoSource] = useState(null);
   const [videoType, setVideoType] = useState(null);
   const [posterUrl, setPosterUrl] = useState(null);
@@ -71,94 +68,86 @@ export default function PostCard({
   const [reactions, setReactions] = useState(EMOJI_SET);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); // State for custom delete confirmation
-  const [isLoading, setIsLoading] = useState(true); // Loading state for post data
-  const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false); // State to track Twitter embed failure
-  const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false); // State to track Instagram embed failure
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false);
+  const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false);
+  const [aspect, setAspect] = useState(16 / 9); // lock size from metadata; prevents “blow up”
 
   const postRef = doc(db, 'posts', postId);
 
   // Effect to fetch initial post data and set up real-time listener
   useEffect(() => {
     setIsLoading(true);
-    const unsubscribe = onSnapshot(postRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        setPostType(data.type || 'general');
+    const unsubscribe = onSnapshot(
+      postRef,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setPostType(data.type || 'general');
 
-        if (data.type === 'trade') {
-          setTradeData({
-            giving: data.giving || '',
-            seeking: data.seeking || '',
-            notes: data.notes || '',
-          });
+          if (data.type === 'trade') {
+            setTradeData({
+              giving: data.giving || '',
+              seeking: data.seeking || '',
+              notes: data.notes || '',
+            });
+          } else {
+            setTradeData(null);
+          }
+
+          if (data.type === 'poll') {
+            setPollData(data.poll);
+            const voted = localStorage.getItem(`voted-${postId}`);
+            setHasVoted(!!voted);
+          } else {
+            setPollData(null);
+          }
+
+          const fromFirestore = data.reactions || {};
+          const mergedReactions = { ...EMOJI_SET, ...fromFirestore };
+          setReactions(mergedReactions);
+          setComments(data.comments || []);
+          setEmbed(data.embed || null);
+          setTwitterEmbedFailed(false);
+          setInstagramEmbedFailed(false);
         } else {
-          setTradeData(null); // Clear trade data if post type changes
+          onUpdate?.();
         }
-
-        if (data.type === 'poll') {
-          setPollData(data.poll);
-          // Check localStorage for vote status. Note: localStorage is client-side only.
-          const voted = localStorage.getItem(`voted-${postId}`);
-          setHasVoted(!!voted);
-        } else {
-          setPollData(null); // Clear poll data if post type changes
-        }
-
-        const fromFirestore = data.reactions || {};
-        const mergedReactions = { ...EMOJI_SET, ...fromFirestore };
-        setReactions(mergedReactions);
-        setComments(data.comments || []);
-        setEmbed(data.embed || null);
-        console.log("PostCard - Fetched embed data:", data.embed); // Log embed data
-        setTwitterEmbedFailed(false); // Reset failure state on new data
-        setInstagramEmbedFailed(false); // Reset failure state for Instagram
-      } else {
-        // Handle case where post might have been deleted
-        console.log("Post does not exist or has been deleted.");
-        // Optionally, trigger onUpdate to remove the card from the UI
-        onUpdate?.();
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error('Error fetching post data:', error);
+        setIsLoading(false);
       }
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching post data:", error);
-      setIsLoading(false);
-    });
+    );
 
-    return () => unsubscribe(); // Cleanup listener on unmount
-  }, [postId, onUpdate]); // onUpdate added as dependency for cleanup if it changes
+    return () => unsubscribe();
+  }, [postId, onUpdate]);
 
-  // Effect to handle video source and type detection
+  // Prefer HLS first; if it errors at runtime, fallback to MP4. Build poster URL once.
   useEffect(() => {
     if (mediaType === 'video' && mediaUrl) {
       const basePath = mediaUrl.split('/upload/')[1]?.replace(/\.(mp4|mov)$/i, '');
       const hlsUrl = `https://res.cloudinary.com/dsvpfi9te/video/upload/sp_auto/${basePath}.m3u8`;
+      const mp4Url = mediaUrl; // original
       const poster = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
 
       setPosterUrl(poster);
+      // Start with HLS; player will handle fallback on 'error'
+      setVideoSource(hlsUrl);
+      setVideoType('application/x-mpegURL');
 
-      // Check for HLS availability first
-      fetch(hlsUrl, { method: 'HEAD' })
-        .then(res => {
-          if (res.ok) {
-            setVideoSource(hlsUrl);
-            setVideoType('application/x-mpegURL');
-          } else {
-            // Fallback to original MP4 if HLS is not available
-            setVideoSource(mediaUrl);
-            setVideoType('video/mp4');
-          }
-        })
-        .catch(error => {
-          console.error('Error checking HLS source, falling back to MP4:', error);
-          setVideoSource(mediaUrl);
-          setVideoType('video/mp4');
-        });
+      // NOTE: no HEAD probe — avoids CORS/timing edge cases on mobile
+    } else {
+      setVideoSource(null);
+      setVideoType(null);
+      setPosterUrl(null);
     }
   }, [mediaUrl, mediaType]);
 
-  // Callback to toggle video play/pause
-  const togglePlay = useCallback(() => {
+  // Gesture-based play/pause toggle that ignores scrolls
+  const togglePlayTapAware = useCallback((e) => {
     const player = playerRef.current;
     if (!player) return;
 
@@ -166,190 +155,238 @@ export default function PostCard({
     if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player !== player) {
       currentPlayingPlayerInfo.player.pause();
       currentPlayingPlayerInfo.setShowOverlay(true);
-      currentPlayingPlayerInfo.player.muted(true); // Mute when pausing others
+      currentPlayingPlayerInfo.player.muted(true);
     }
 
     if (player.paused()) {
       player.play().then(() => {
-        player.muted(false); // Unmute when playing
-        player.poster(''); // Hide poster after play starts
+        // keep poster management to video.js; do not blank manually
+        player.muted(false);
         setShowPlayOverlay(false);
         currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
-      }).catch(err => {
+      }).catch((err) => {
         console.error('Video play error:', err);
-        setShowPlayOverlay(true); // Show overlay if play fails
+        setShowPlayOverlay(true);
       });
     } else {
       player.pause();
       setShowPlayOverlay(true);
-      player.muted(true); // Mute when paused
+      player.muted(true);
       currentPlayingPlayerInfo = null;
     }
   }, []);
 
-  // Effect to initialize and manage video.js player
+  // Initialize and manage video.js player
   useEffect(() => {
-    if (mediaType === 'video' && videoRef.current && videoSource) {
-      if (!playerRef.current) {
-        // Initialize video.js player
-        playerRef.current = videojs(videoRef.current, {
-          controls: false, // Custom controls via overlay
-          autoplay: false,
-          preload: 'auto',
-          responsive: true,
-          fluid: true,
-          loop: true,
-          muted: true, // Start muted to allow autoplay without user interaction
-          poster: posterUrl,
-        });
+    if (mediaType !== 'video' || !videoRef.current || !videoSource) return;
 
-        const player = playerRef.current;
-        const videoElement = player.el().querySelector('video');
+    if (!playerRef.current) {
+      // Initialize player with conservative, mobile-friendly defaults
+      playerRef.current = videojs(videoRef.current, {
+        controls: false, // we use our overlay
+        autoplay: false,
+        preload: 'metadata',
+        responsive: true,
+        fluid: true, // video.js maintains an internal ratio; we also set CSS aspect-ratio wrapper
+        loop: true,
+        muted: true, // allow autoplay after tap
+        poster: posterUrl || undefined,
+      });
 
-        // Event handler for video interaction (click/touch)
-        const handleInteraction = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          togglePlay();
+      const player = playerRef.current;
+
+      // Always set source via API (not <source> tag)
+      player.src({ src: videoSource, type: videoType });
+
+      // Keep overlay state in sync
+      player.on('play', () => setShowPlayOverlay(false));
+      player.on('pause', () => setShowPlayOverlay(true));
+
+      // Derive aspect ratio once metadata is ready; locks layout before/after play
+      player.one('loadedmetadata', () => {
+        try {
+          const el = player.el().querySelector('video');
+          if (el && el.videoWidth && el.videoHeight) {
+            const ar = el.videoWidth / el.videoHeight;
+            // If portrait video (e.g., phone), use that ratio; else typical widescreen
+            setAspect(ar > 0 ? ar : 16 / 9);
+          }
+        } catch (err) {
+          setAspect(16 / 9);
+        }
+      });
+
+      // Fallback: if HLS fails for any reason, swap to MP4 once
+      const handleError = () => {
+        const err = player.error();
+        // Only attempt fallback if current type is HLS
+        if (videoType === 'application/x-mpegURL') {
+          // Use original mp4
+          if (mediaUrl) {
+            player.src({ src: mediaUrl, type: 'video/mp4' });
+            setVideoType('video/mp4');
+            // Ensure poster remains
+            if (posterUrl) player.poster(posterUrl);
+          }
+        }
+      };
+      player.on('error', handleError);
+
+      // Build a tap-aware handler once and keep it stable
+      handlerRef.current = (() => {
+        let startX = 0, startY = 0, startT = 0, moved = false;
+
+        const onPointerDown = (ev) => {
+          // Allow vertical scrolling to pass through without interference
+          startX = ev.clientX ?? (ev.touches?.[0]?.clientX || 0);
+          startY = ev.clientY ?? (ev.touches?.[0]?.clientY || 0);
+          startT = Date.now();
+          moved = false;
         };
 
-        // Add event listeners to the video element
-        if (videoElement) {
-          videoElement.addEventListener('click', handleInteraction);
-          videoElement.addEventListener('touchend', handleInteraction);
-        }
+        const onPointerMove = (ev) => {
+          const x = ev.clientX ?? (ev.touches?.[0]?.clientX || 0);
+          const y = ev.clientY ?? (ev.touches?.[0]?.clientY || 0);
+          if (Math.abs(x - startX) > 10 || Math.abs(y - startY) > 10) moved = true;
+        };
 
-        // Update overlay state based on player events
-        player.on('play', () => setShowPlayOverlay(false));
-        player.on('pause', () => setShowPlayOverlay(true));
-        setShowPlayOverlay(true); // Ensure overlay is shown initially
-      } else {
-        // Update video source if it changes
-        if (playerRef.current.currentSrc() !== videoSource) {
-          playerRef.current.src({ src: videoSource, type: videoType });
-          playerRef.current.poster(posterUrl);
-          setShowPlayOverlay(true); // Show overlay when source changes
-        }
+        const onPointerUp = (ev) => {
+          const dur = Date.now() - startT;
+          const x = ev.clientX ?? (ev.changedTouches?.[0]?.clientX || 0);
+          const y = ev.clientY ?? (ev.changedTouches?.[0]?.clientY || 0);
+
+          // Treat as tap only if quick and not moved
+          if (!moved && dur < 300) {
+            // Make sure the end was inside the video rect
+            const rect = player.el().getBoundingClientRect();
+            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+              togglePlayTapAware(ev);
+            }
+          }
+        };
+
+        return { onPointerDown, onPointerMove, onPointerUp };
+      })();
+
+      const videoEl = player.el().querySelector('video');
+      if (videoEl) {
+        // Use pointer/touch listeners tuned for mobile scroll behavior
+        videoEl.addEventListener('touchstart', handlerRef.current.onPointerDown, { passive: true });
+        videoEl.addEventListener('touchmove', handlerRef.current.onPointerMove, { passive: true });
+        videoEl.addEventListener('touchend', handlerRef.current.onPointerUp, { passive: true });
+        videoEl.addEventListener('mousedown', handlerRef.current.onPointerDown);
+        videoEl.addEventListener('mousemove', handlerRef.current.onPointerMove);
+        videoEl.addEventListener('mouseup', handlerRef.current.onPointerUp);
+        // Hint to browsers: vertical pan allowed (don’t treat as pinch/zoom area)
+        videoEl.style.touchAction = 'pan-y';
+      }
+    } else {
+      // Update source when it changes
+      const player = playerRef.current;
+      if (player.currentSrc() !== videoSource) {
+        player.src({ src: videoSource, type: videoType });
+        if (posterUrl) player.poster(posterUrl);
+        setShowPlayOverlay(true);
       }
     }
 
-    // Cleanup function for video.js player and event listeners
+    // Cleanup function
     return () => {
       if (playerRef.current) {
         const player = playerRef.current;
-        const videoElement = player.el().querySelector('video');
-        if (videoElement) {
-          const handleInteraction = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            togglePlay();
-          };
-          videoElement.removeEventListener('click', handleInteraction);
-          videoElement.removeEventListener('touchend', handleInteraction);
+        const videoEl = player.el()?.querySelector('video');
+
+        if (videoEl && handlerRef.current) {
+          videoEl.removeEventListener('touchstart', handlerRef.current.onPointerDown);
+          videoEl.removeEventListener('touchmove', handlerRef.current.onPointerMove);
+          videoEl.removeEventListener('touchend', handlerRef.current.onPointerUp);
+          videoEl.removeEventListener('mousedown', handlerRef.current.onPointerDown);
+          videoEl.removeEventListener('mousemove', handlerRef.current.onPointerMove);
+          videoEl.removeEventListener('mouseup', handlerRef.current.onPointerUp);
         }
-        playerRef.current.dispose(); // Dispose of the video.js player
+
+        // If this player was active, clear global ref
+        if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === player) {
+          currentPlayingPlayerInfo = null;
+        }
+        player.dispose();
         playerRef.current = null;
-      }
-      // Clear global reference if this player was the one currently playing
-      if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === playerRef.current) {
-        currentPlayingPlayerInfo = null;
+        handlerRef.current = null;
       }
     };
-  }, [videoSource, videoType, mediaType, posterUrl, togglePlay]);
+  }, [videoSource, videoType, mediaType, posterUrl, togglePlayTapAware, mediaUrl]);
 
-  // Effect to handle Twitter widget loading and rendering
+  // Twitter widgets
   useEffect(() => {
-    if (embed?.type === 'twitter') {
-      const loadTwitterWidgets = () => {
-        if (window.twttr && window.twttr.widgets) {
-          const targetElement = document.getElementById(`tweet-embed-${postId}`);
-          setTimeout(() => {
-            if (targetElement) {
-              window.twttr.widgets.load(targetElement)
-                .then((el) => {
-                  console.log("Twitter widget loaded successfully for postId:", postId, el);
-                  setTwitterEmbedFailed(false);
-                })
-                .catch((err) => {
-                  console.error("Error loading Twitter widget for postId:", postId, err);
-                  setTwitterEmbedFailed(true);
-                });
-            } else {
-              console.warn("Twitter Embed - Target element not found for postId:", postId);
+    if (embed?.type !== 'twitter') return;
+
+    const loadTwitterWidgets = () => {
+      const targetElement = document.getElementById(`tweet-embed-${postId}`);
+      if (!targetElement) {
+        setTwitterEmbedFailed(true);
+        return;
+      }
+      // Clear previous children to avoid double-injection on hot reloads
+      // (Keep the blockquote; widgets.js will replace it)
+      try {
+        if (window.twttr?.widgets?.load) {
+          window.twttr.widgets
+            .load(targetElement)
+            .then(() => setTwitterEmbedFailed(false))
+            .catch((err) => {
+              console.error('Twitter load error:', err);
               setTwitterEmbedFailed(true);
-            }
-          }, 100);
+            });
         } else {
-          console.warn("Twitter Embed - window.twttr or window.twttr.widgets not available.");
           setTwitterEmbedFailed(true);
         }
-      };
-
-      if (typeof window.twttr === 'undefined') {
-        const script = document.createElement('script');
-        script.setAttribute('src', 'https://platform.twitter.com/widgets.js');
-        script.setAttribute('async', '');
-        script.setAttribute('charset', 'utf-8');
-        document.body.appendChild(script);
-        script.onload = () => {
-          loadTwitterWidgets();
-        };
-        script.onerror = (e) => {
-          console.error("Twitter Embed - Failed to load widgets.js script:", e);
-          setTwitterEmbedFailed(true);
-        };
-      } else {
-        loadTwitterWidgets();
+      } catch (e) {
+        setTwitterEmbedFailed(true);
       }
+    };
+
+    if (typeof window.twttr === 'undefined') {
+      const script = document.createElement('script');
+      script.setAttribute('src', 'https://platform.twitter.com/widgets.js');
+      script.setAttribute('async', '');
+      script.setAttribute('charset', 'utf-8');
+      document.body.appendChild(script);
+      script.onload = loadTwitterWidgets;
+      script.onerror = () => setTwitterEmbedFailed(true);
+    } else {
+      loadTwitterWidgets();
     }
   }, [embed, postId]);
 
-  // NEW: Effect to handle Instagram widget loading and rendering
+  // Instagram widgets
   useEffect(() => {
-    if (embed?.type === 'instagram') {
-      const loadInstagramWidgets = () => {
-        // Instagram's script uses window.instgrm.Embeds.process()
-        if (window.instgrm && window.instgrm.Embeds) {
-          // A small delay to ensure the blockquote is in the DOM before processing
-          setTimeout(() => {
-            try {
-              window.instgrm.Embeds.process();
-              console.log("Instagram widget processed successfully for postId:", postId);
-              setInstagramEmbedFailed(false);
-            } catch (err) {
-              console.error("Error processing Instagram widget for postId:", postId, err);
-              setInstagramEmbedFailed(true);
-            }
-          }, 100);
+    if (embed?.type !== 'instagram') return;
+
+    const process = () => {
+      try {
+        if (window.instgrm?.Embeds?.process) {
+          window.instgrm.Embeds.process();
+          setInstagramEmbedFailed(false);
         } else {
-          console.warn("Instagram Embed - window.instgrm or window.instgrm.Embeds not available.");
           setInstagramEmbedFailed(true);
         }
-      };
-
-      // Check if instgrm object exists, if not, load the script
-      if (typeof window.instgrm === 'undefined') {
-        console.log("Instagram Embed - Loading embed.js script...");
-        const script = document.createElement('script');
-        script.setAttribute('src', 'https://www.instagram.com/embed.js');
-        script.setAttribute('async', '');
-        script.setAttribute('charset', 'utf-8');
-        document.body.appendChild(script);
-        script.onload = () => {
-          console.log("Instagram Embed - embed.js script loaded.");
-          loadInstagramWidgets(); // Process widgets once script is loaded
-        };
-        script.onerror = (e) => {
-          console.error("Instagram Embed - Failed to load embed.js script:", e);
-          setInstagramEmbedFailed(true);
-        };
-      } else {
-        console.log("Instagram Embed - embed.js script already loaded, attempting to process widgets.");
-        loadInstagramWidgets();
+      } catch (e) {
+        setInstagramEmbedFailed(true);
       }
-    }
-  }, [embed, postId]); // Depend on embed and postId to re-run when they change
+    };
 
+    if (typeof window.instgrm === 'undefined') {
+      const script = document.createElement('script');
+      script.setAttribute('src', 'https://www.instagram.com/embed.js');
+      script.setAttribute('async', '');
+      script.setAttribute('charset', 'utf-8');
+      document.body.appendChild(script);
+      script.onload = process;
+      script.onerror = () => setInstagramEmbedFailed(true);
+    } else {
+      process();
+    }
+  }, [embed, postId]);
 
   /**
    * Handles user reaction to the post.
@@ -357,15 +394,16 @@ export default function PostCard({
    */
   const handleReaction = async (emoji) => {
     try {
-      // Optimistic UI update
-      setReactions(prev => ({ ...prev, [emoji]: (prev[emoji] || 0) + 1 }));
+      setReactions((prev) => ({ ...prev, [emoji]: (prev[emoji] || 0) + 1 }));
       await updateDoc(postRef, {
         [`reactions.${emoji}`]: increment(1),
       });
     } catch (error) {
-      console.error("Error updating reaction:", error);
-      // Revert optimistic update on error
-      setReactions(prev => ({ ...prev, [emoji]: (prev[emoji] || 0) - 1 }));
+      console.error('Error updating reaction:', error);
+      setReactions((prev) => ({
+        ...prev,
+        [emoji]: Math.max((prev[emoji] || 1) - 1, 0),
+      }));
     }
   };
 
@@ -379,12 +417,14 @@ export default function PostCard({
 
     const comment = {
       text: newComment.trim(),
-      createdAt: Date.now(), // Using Date.now() for simplicity, Firestore Timestamp is also an option
+      createdAt: Date.now(),
       id: crypto.randomUUID(),
     };
 
-    const updated = [...comments, comment];
-    setComments(updated); // Optimistic UI update
+    const prev = comments;
+    const updated = [...prev, comment];
+    setComments(updated);
+
     setNewComment('');
 
     try {
@@ -392,9 +432,8 @@ export default function PostCard({
         comments: updated,
       });
     } catch (error) {
-      console.error("Error adding comment:", error);
-      // Revert optimistic update on error
-      setComments(comments);
+      console.error('Error adding comment:', error);
+      setComments(prev);
     }
   };
 
@@ -411,11 +450,11 @@ export default function PostCard({
   const confirmDeletePost = async () => {
     try {
       await deleteDoc(postRef);
-      onUpdate?.(); // Notify parent component of deletion
+      onUpdate?.();
     } catch (error) {
-      console.error("Error deleting post:", error);
+      console.error('Error deleting post:', error);
     } finally {
-      setShowDeleteConfirm(false); // Hide confirmation modal
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -425,9 +464,9 @@ export default function PostCard({
   const handleResetReactions = async () => {
     try {
       await updateDoc(postRef, { reactions: EMOJI_SET });
-      setReactions(EMOJI_SET); // Optimistic UI update
+      setReactions(EMOJI_SET);
     } catch (error) {
-      console.error("Error resetting reactions:", error);
+      console.error('Error resetting reactions:', error);
     }
   };
 
@@ -436,44 +475,40 @@ export default function PostCard({
    * @param {string} commentId - The ID of the comment to delete.
    */
   const handleDeleteComment = async (commentId) => {
-    const updated = comments.filter(c => c.id !== commentId);
-    setComments(updated); // Optimistic UI update
+    const prev = comments;
+    const updated = prev.filter((c) => c.id !== commentId);
+    setComments(updated);
     try {
       await updateDoc(postRef, { comments: updated });
     } catch (error) {
-      console.error("Error deleting comment:", error);
-      // Revert optimistic update on error
-      setComments(comments);
+      console.error('Error deleting comment:', error);
+      setComments(prev);
     }
   };
 
   /**
    * Renders the embedded content based on its type.
-   * This function is called within the JSX.
    */
   const renderEmbed = () => {
     if (!embed) return null;
 
     let type, url;
     const parsed = parseEmbedUrl(embed.url);
-    console.log("renderEmbed - Parsed embed:", parsed); // Log parsed embed
     if (parsed) {
       type = parsed.type;
       url = parsed.url;
     } else {
-      console.warn("renderEmbed - Failed to parse embed URL:", embed.url); // Warn if parsing fails
-      return null; // skip rendering if it can't be parsed
+      return null;
     }
 
     if (!type || !url) return null;
 
     if (type === 'youtube') {
-      // The parseEmbedUrl now returns the direct embed URL for YouTube
       return (
         <div className="mt-4">
           <iframe
             className="w-full aspect-video rounded-lg"
-            src={url} // Use the directly embeddable URL from parseEmbedUrl
+            src={url}
             frameBorder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
@@ -484,12 +519,11 @@ export default function PostCard({
     }
 
     if (type === 'vimeo') {
-      // The parseEmbedUrl now returns the direct embed URL for Vimeo
       return (
         <div className="mt-4">
           <iframe
             className="w-full aspect-video rounded-lg"
-            src={url} // Use the directly embeddable URL from parseEmbedUrl
+            src={url}
             frameBorder="0"
             allow="autoplay; fullscreen; picture-in-picture"
             allowFullScreen
@@ -514,28 +548,25 @@ export default function PostCard({
     }
 
     if (type === 'twitter') {
-      // Twitter embeds are handled by the twttr.widgets.load() script
-      // We need to provide the blockquote element with the full tweet URL in the anchor tag
-      console.log("renderEmbed - Rendering Twitter blockquote with URL:", url); // Log Twitter URL
-
-      // Force twitter.com domain for embed to improve reliability
       const twitterDotComUrl = url.replace('x.com', 'twitter.com');
-      console.log("renderEmbed - Using twitter.com URL for embed:", twitterDotComUrl);
-
       return (
         <div className="mt-4">
           {twitterEmbedFailed ? (
             <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
               <p className="font-semibold mb-2">Could not load Twitter post.</p>
-              <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline"
+              >
                 Click here to view the post on X.com
               </a>
             </div>
           ) : (
-            <div id={`tweet-embed-${postId}`}> {/* Added unique ID for targeted loading */}
+            <div id={`tweet-embed-${postId}`}>
               <blockquote className="twitter-tweet" data-dnt="true" data-theme="light">
-                {/* The href must be the full, canonical tweet URL for the widget to work */}
-                <a href={twitterDotComUrl}></a> {/* Use the forced twitter.com URL here */}
+                <a href={twitterDotComUrl}></a>
               </blockquote>
             </div>
           )}
@@ -546,7 +577,12 @@ export default function PostCard({
     if (type === 'tiktok') {
       return (
         <div className="mt-4">
-          <blockquote className="tiktok-embed" cite={url} data-video-id="" style={{ maxWidth: '605px', margin: '0 auto' }}>
+          <blockquote
+            className="tiktok-embed"
+            cite={url}
+            data-video-id=""
+            style={{ maxWidth: '605px', margin: '0 auto' }}
+          >
             <a href={url}></a>
           </blockquote>
         </div>
@@ -554,26 +590,27 @@ export default function PostCard({
     }
 
     if (type === 'instagram') {
-      // Instagram embeds are handled by the instgrm.Embeds.process() script
-      console.log("renderEmbed - Rendering Instagram blockquote with URL:", url);
       return (
         <div className="mt-4">
           {instagramEmbedFailed ? (
             <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
               <p className="font-semibold mb-2">Could not load Instagram post.</p>
-              <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline"
+              >
                 Click here to view the post on Instagram
               </a>
             </div>
           ) : (
-            // Instagram's embed script expects a blockquote with specific attributes
             <blockquote
               className="instagram-media"
               data-instgrm-permalink={url}
               data-instgrm-version="14"
               style={{ width: '100%', margin: '0 auto' }}
             >
-              {/* The content inside the blockquote is usually just a link to the post */}
               <a href={url} target="_blank" rel="noopener noreferrer"></a>
             </blockquote>
           )}
@@ -597,10 +634,14 @@ export default function PostCard({
       );
     }
 
-    // Fallback to generic clickable link
     return (
       <div className="mt-4">
-        <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 underline"
+        >
           View Embedded Link
         </a>
       </div>
@@ -674,22 +715,30 @@ export default function PostCard({
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            <div data-vjs-player className="relative">
-              <video
-                ref={videoRef}
-                className="video-js rounded-lg max-h-[500px] w-full"
-                playsInline
-              >
-                <source src={videoSource} type={videoType} />
-              </video>
+            // Size is pre-locked via CSS aspect-ratio; no “blow up” on play.
+            <div
+              className="relative rounded-lg"
+              style={{ aspectRatio: aspect || 16 / 9, width: '100%' }}
+            >
+              <div data-vjs-player className="absolute inset-0">
+                <video
+                  ref={videoRef}
+                  className="video-js rounded-lg w-full h-full object-cover"
+                  playsInline
+                  // No <source> children; we set source via player API for consistency.
+                />
+              </div>
               {showPlayOverlay && (
                 <div
                   className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-10"
                   onClick={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
-                    togglePlay();
+                    // Let our tap-aware handler decide; here we just call it directly for mouse
+                    togglePlayTapAware(e);
                   }}
+                  // Let vertical scrolls pass through more naturally on mobile
+                  style={{ touchAction: 'pan-y' }}
                 >
                   <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
                 </div>
@@ -739,7 +788,6 @@ export default function PostCard({
                   <button
                     onClick={async () => {
                       const updatedOptions = [...pollData.options];
-                      // Ensure votes array exists before pushing
                       updatedOptions[idx].votes = [...(updatedOptions[idx].votes || []), Date.now()];
 
                       try {
@@ -749,16 +797,15 @@ export default function PostCard({
 
                         localStorage.setItem(`voted-${postId}`, '1');
                         setHasVoted(true);
-                        setPollData(prev => ({
+                        setPollData((prev) => ({
                           ...prev,
                           options: updatedOptions,
                         }));
                       } catch (error) {
-                        console.error("Error voting on poll:", error);
-                        // Revert optimistic update if there's an error
-                        setPollData(prev => ({
+                        console.error('Error voting on poll:', error);
+                        setPollData((prev) => ({
                           ...prev,
-                          options: pollData.options, // Revert to original options
+                          options: pollData.options,
                         }));
                       }
                     }}
