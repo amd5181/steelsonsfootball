@@ -867,4 +867,3 @@ export default function PostCard({
     </div>
   );
 }
-�
