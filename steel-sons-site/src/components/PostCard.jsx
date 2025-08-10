@@ -11,7 +11,7 @@ import { db } from '../lib/firebase';
 import { parseEmbedUrl } from '../utils/embedParser';
 
 // Initial emoji set for reactions
-const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 };
+const EMOJI_SET = { '❤️': 0, '�': 0, '🔥': 0, '👎': 0 };
 
 /**
  * Formats a timestamp into a localized date and time string.
@@ -57,8 +57,6 @@ export default function PostCard({
     showPoster,
     posterUrl,
     handleVideoInteraction,
-    setAspect,
-    setShowPoster,
   } = useVideoPlayer(playerRef, videoRef, mediaUrl, mediaType);
 
   const [embed, setEmbed] = useState(null);
@@ -523,7 +521,8 @@ export default function PostCard({
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' ? (
             <div
-              className="relative rounded-lg"
+              data-vjs-player
+              className="relative"
               style={{ aspectRatio: aspect || 16 / 9, width: '100%' }}
             >
               {showPoster && (
@@ -531,20 +530,15 @@ export default function PostCard({
                   src={posterUrl || ''}
                   alt="video poster"
                   className="absolute inset-0 w-full h-full object-cover z-10"
-                  onLoad={(e) => {
-                    const img = e.currentTarget;
-                    if (img.naturalWidth && img.naturalHeight) {
-                      const ar = img.naturalWidth / img.naturalHeight;
-                      if (ar > 0) setAspect(ar);
-                    }
-                  }}
-                  onError={() => setShowPoster(false)}
+                  // Note: Aspect ratio is now managed by the hook, so we don't need to set it here
+                  // The hook will update the `aspect` state which drives the style prop above.
+                  onError={() => {}} // Handle poster errors gracefully
                 />
               )}
               <div className="absolute inset-0">
                 <video
                   ref={videoRef}
-                  className="rounded-lg w-full h-full object-cover"
+                  className="video-js vjs-theme-forest rounded-lg w-full h-full object-cover"
                   playsInline
                 />
               </div>
@@ -699,3 +693,4 @@ export default function PostCard({
     </div>
   );
 }
+�
