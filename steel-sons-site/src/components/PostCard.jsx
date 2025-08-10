@@ -624,12 +624,12 @@ export default function PostCard({
       <p className="text-gray-800 text-lg leading-relaxed whitespace-pre-line mt-2">{text}</p>
 
       {mediaUrl && (
-        <div className="mt-4 rounded-lg overflow-hidden relative w-full max-h-[500px]">
+        <div className="mt-4 rounded-lg overflow-hidden relative w-full max-h-[500px] flex items-center justify-center">
           {mediaType === 'video' && videoSource ? (
-            <div data-vjs-player className="relative h-full w-full">
+            <div data-vjs-player className="relative w-full h-full">
               <video
                 ref={videoRef}
-                className="video-js h-full w-full"
+                className="video-js vjs-fluid w-full"
                 playsInline
               >
                 <source src={videoSource} type={videoType} />
@@ -652,7 +652,7 @@ export default function PostCard({
               <img
                 src={mediaUrl}
                 alt="uploaded media"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
               />
             )
           )}
