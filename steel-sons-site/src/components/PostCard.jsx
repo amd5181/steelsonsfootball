@@ -622,7 +622,7 @@ export default function PostCard({
     if (type === 'video') {
       return (
         <div className="mt-4">
-          <video src={url} controls className="w-full rounded-lg max-h-[500px]" playsInline />
+          <video src={url} controls className="w-full rounded-lg max-h-[700px]" playsInline />
         </div>
       );
     }
@@ -711,7 +711,7 @@ export default function PostCard({
               {/* Let video.js handle fluid sizing; we just cap the container height */}
               <div
                 className={`relative w-full transition-[height] duration-300 ease-out
-                  ${showPlayOverlay ? 'h-[52svh]' : 'h-[88svh]'} md:h-[500px]`}
+                  ${showPlayOverlay ? 'h-[52svh]' : 'h-[88svh]'} md:h-[700px]`}
               >
                 {/* Player fills this box */}
                 <div data-vjs-player className="absolute inset-0">
