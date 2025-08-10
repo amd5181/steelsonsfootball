@@ -9,7 +9,7 @@ export default function Header({ access, onReset }) {
     <header className="sticky top-0 z-50 bg-white shadow-sm">
       <div className="relative flex items-center justify-between px-4 py-3 border-b">
         <h1 className="text-xl font-bold text-center w-full absolute left-0 right-0 mx-auto pointer-events-none select-none">
-          Steel Sons Fantasy Football
+          -Steel Sons Fantasy Football-
         </h1>
 
         <button
