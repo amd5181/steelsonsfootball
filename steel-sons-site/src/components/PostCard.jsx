@@ -201,7 +201,7 @@ export default function PostCard({
           autoplay: false,
           preload: 'auto',
           responsive: true,
-          fluid: true,
+          fill: true,
           loop: true,
           muted: true, // Start muted to allow autoplay without user interaction
           poster: posterUrl,
@@ -704,27 +704,36 @@ export default function PostCard({
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            <div data-vjs-player className="relative">
-              <video
-                ref={videoRef}
-                className="video-js rounded-lg w-full max-h-[80vh] sm:max-h-[500px]"
-                playsInline
-              >
-                <source src={videoSource} type={videoType} />
-              </video>
+            <div className="relative w-full aspect-video max-h-[80dvh] sm:max-h-[500px]">
+              {/* Player fills this box */}
+              <div data-vjs-player className="absolute inset-0">
+                <video
+                  ref={videoRef}
+                  className="video-js vjs-fill rounded-lg"
+                  playsInline
+                >
+                  <source src={videoSource} type={videoType} />
+                </video>
+              </div>
+            
               {showPlayOverlay && (
-                <div
-                  className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-10"
+                <button
+                  type="button"
+                  className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/20 z-10"
                   onClick={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
                     togglePlay();
                   }}
+                  aria-label="Play video"
                 >
-                  <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
-                </div>
+                  <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-hidden="true">
+                    <polygon points="32,24 64,42 32,60" />
+                  </svg>
+                </button>
               )}
             </div>
+
           ) : (
             mediaType === 'image' && (
               <img
