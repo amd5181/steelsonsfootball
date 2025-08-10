@@ -124,30 +124,39 @@ export default function PostCard({
   }, [postId, onUpdate]);
 
   useEffect(() => {
+    // This effect handles video source logic and should only run when mediaUrl or mediaType changes
     if (mediaType === 'video' && mediaUrl) {
-      const basePath = mediaUrl.split('/upload/')[1]?.replace(/\.(mp4|mov)$/i, '');
-      const hlsUrl = `https://res.cloudinary.com/dsvpfi9te/video/upload/sp_auto/${basePath}.m3u8`;
-      const poster = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
+        // Try to construct an HLS URL first
+        const basePath = mediaUrl.split('/upload/')[1]?.replace(/\.(mp4|mov)$/i, '');
+        const hlsUrl = `https://res.cloudinary.com/dsvpfi9te/video/upload/sp_auto/${basePath}.m3u8`;
+        const poster = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
+        setPosterUrl(poster);
 
-      setPosterUrl(poster);
-
-      fetch(hlsUrl, { method: 'HEAD' })
-        .then(res => {
-          if (res.ok) {
-            setVideoSource(hlsUrl);
-            setVideoType('application/x-mpegURL');
-          } else {
-            setVideoSource(mediaUrl);
-            setVideoType('video/mp4');
-          }
-        })
-        .catch(error => {
-          console.error('Error checking HLS source, falling back to MP4:', error);
-          setVideoSource(mediaUrl);
-          setVideoType('video/mp4');
-        });
+        console.log('Attempting to load HLS video from:', hlsUrl);
+        fetch(hlsUrl, { method: 'HEAD' })
+            .then(res => {
+                if (res.ok) {
+                    console.log('HLS source found, setting video source to HLS.');
+                    setVideoSource(hlsUrl);
+                    setVideoType('application/x-mpegURL');
+                } else {
+                    console.log('HLS source not found, falling back to original MP4 URL.');
+                    setVideoSource(mediaUrl);
+                    setVideoType('video/mp4');
+                }
+            })
+            .catch(error => {
+                console.error('Error checking HLS source, falling back to MP4:', error);
+                setVideoSource(mediaUrl);
+                setVideoType('video/mp4');
+            });
+    } else {
+        // If mediaType is not a video or mediaUrl is null, clear the state
+        setVideoSource(null);
+        setVideoType(null);
+        setPosterUrl(null);
     }
-  }, [mediaUrl, mediaType]);
+}, [mediaUrl, mediaType]);
 
   const togglePlay = useCallback(() => {
     const player = playerRef.current;
@@ -178,14 +187,17 @@ export default function PostCard({
   }, []);
 
   useEffect(() => {
+    // This effect initializes the video.js player and attaches event listeners
     if (mediaType === 'video' && videoRef.current && videoSource) {
+      console.log('Initializing video.js with source:', videoSource);
       if (!playerRef.current) {
+        // Only initialize the player if it doesn't exist
         playerRef.current = videojs(videoRef.current, {
           controls: false,
           autoplay: false,
           preload: 'auto',
           responsive: true,
-          fluid: false, // Changed from true to false
+          fluid: true, // Reverted to true for responsive behavior
           loop: true,
           muted: true,
           poster: posterUrl,
@@ -226,7 +238,9 @@ export default function PostCard({
         player.on('pause', () => setShowPlayOverlay(true));
         setShowPlayOverlay(true);
       } else {
+        // If the player exists, but the source has changed, update it.
         if (playerRef.current.currentSrc() !== videoSource) {
+          console.log('Video source changed, updating player.');
           playerRef.current.src({ src: videoSource, type: videoType });
           playerRef.current.poster(posterUrl);
           setShowPlayOverlay(true);
@@ -235,6 +249,7 @@ export default function PostCard({
     }
 
     return () => {
+      // Cleanup function
       if (playerRef.current) {
         const player = playerRef.current;
         const videoElement = player.el().querySelector('video');
