@@ -336,49 +336,34 @@ export default function PostCard({
 
   // NEW: Effect to handle Instagram widget loading and rendering
   useEffect(() => {
-    if (embed?.type === 'instagram') {
-      const loadInstagramWidgets = () => {
-        // Instagram's script uses window.instgrm.Embeds.process()
-        if (window.instgrm && window.instgrm.Embeds) {
-          // A small delay to ensure the blockquote is in the DOM before processing
-          setTimeout(() => {
-            try {
-              window.instgrm.Embeds.process();
-              console.log("Instagram widget processed successfully for postId:", postId);
-              setInstagramEmbedFailed(false);
-            } catch (err) {
-              console.error("Error processing Instagram widget for postId:", postId, err);
-              setInstagramEmbedFailed(true);
-            }
-          }, 100);
-        } else {
-          console.warn("Instagram Embed - window.instgrm or window.instgrm.Embeds not available.");
-          setInstagramEmbedFailed(true);
-        }
-      };
-
-      // Check if instgrm object exists, if not, load the script
-      if (typeof window.instgrm === 'undefined') {
-        console.log("Instagram Embed - Loading embed.js script...");
-        const script = document.createElement('script');
-        script.setAttribute('src', 'https://www.instagram.com/embed.js');
-        script.setAttribute('async', '');
-        script.setAttribute('charset', 'utf-8');
-        document.body.appendChild(script);
-        script.onload = () => {
-          console.log("Instagram Embed - embed.js script loaded.");
-          loadInstagramWidgets(); // Process widgets once script is loaded
-        };
-        script.onerror = (e) => {
-          console.error("Instagram Embed - Failed to load embed.js script:", e);
-          setInstagramEmbedFailed(true);
-        };
-      } else {
-        console.log("Instagram Embed - embed.js script already loaded, attempting to process widgets.");
-        loadInstagramWidgets();
+    if (embed?.type !== 'instagram') return;
+  
+    // NOTE: load https://www.instagram.com/embed.js once globally in index.html.
+    // Here we only (re)process and detect failure.
+    const tryProcess = () => {
+      try {
+        window.instgrm?.Embeds?.process?.();
+      } catch (e) {
+        // swallow; we'll flip the fallback below if it never renders
       }
-    }
-  }, [embed, postId]); // Depend on embed and postId to re-run when they change
+    };
+  
+    // process right after render
+    const t1 = setTimeout(tryProcess, 0);
+  
+    // after a beat, verify IG actually injected an iframe with size; otherwise show fallback
+    const t2 = setTimeout(() => {
+      const container = document.getElementById(`ig-wrap-${postId}`);
+      const iframe = container?.querySelector('iframe');
+      const ok = !!iframe && iframe.clientHeight > 40;
+      setInstagramEmbedFailed(!ok);
+    }, 1200);
+  
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [embed, postId]);
 
 
   /**
@@ -584,32 +569,31 @@ export default function PostCard({
     }
 
     if (type === 'instagram') {
-      // Instagram embeds are handled by the instgrm.Embeds.process() script
       console.log("renderEmbed - Rendering Instagram blockquote with URL:", url);
+      const permalink = url.endsWith('/') ? url : `${url}/`;
       return (
-        <div className="mt-4">
+        <div className="mt-4" id={`ig-wrap-${postId}`}>
           {instagramEmbedFailed ? (
             <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
               <p className="font-semibold mb-2">Could not load Instagram post.</p>
-              <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                Click here to view the post on Instagram
+              <a href={permalink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                View on Instagram
               </a>
             </div>
           ) : (
-            // Instagram's embed script expects a blockquote with specific attributes
             <blockquote
               className="instagram-media"
-              data-instgrm-permalink={url}
+              data-instgrm-permalink={permalink}
               data-instgrm-version="14"
               style={{ width: '100%', margin: '0 auto' }}
             >
-              {/* The content inside the blockquote is usually just a link to the post */}
-              <a href={url} target="_blank" rel="noopener noreferrer"></a>
+              <a href={permalink} target="_blank" rel="noopener noreferrer"></a>
             </blockquote>
           )}
         </div>
       );
     }
+
 
     if (type === 'image') {
       return (
