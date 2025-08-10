@@ -19,7 +19,7 @@ import { parseEmbedUrl } from '../utils/embedParser';
 let currentPlayingPlayerInfo = null;
 
 // Initial emoji set for reactions
-const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 };
+const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '\u{1F44E}': 0 };
 
 /**
  * Formats a timestamp into a localized date and time string.
@@ -76,7 +76,7 @@ export default function PostCard({
   const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false); // State to track Twitter embed failure
   const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false); // State to track Instagram embed failure
 
-  // NEW: State to track touch start position for distinguishing taps from scrolls
+  // State to track touch start position for distinguishing taps from scrolls
   const touchStartPos = useRef({ x: 0, y: 0 });
 
   const postRef = doc(db, 'posts', postId);
@@ -333,7 +333,7 @@ export default function PostCard({
     }
   }, [embed, postId]);
 
-  // NEW: Effect to handle Instagram widget loading and rendering
+  // Effect to handle Instagram widget loading and rendering
   useEffect(() => {
     if (embed?.type === 'instagram') {
       const loadInstagramWidgets = () => {
@@ -703,26 +703,29 @@ export default function PostCard({
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            <div data-vjs-player className="relative">
-              <video
-                ref={videoRef}
-                className="video-js rounded-lg max-h-[500px] w-full"
-                playsInline
-              >
-                <source src={videoSource} type={videoType} />
-              </video>
-              {showPlayOverlay && (
-                <div
-                  className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-10"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    togglePlay();
-                  }}
+            // New responsive container to maintain 16:9 aspect ratio
+            <div className="relative w-full pb-[56.25%] overflow-hidden">
+              <div data-vjs-player className="absolute inset-0">
+                <video
+                  ref={videoRef}
+                  className="video-js w-full h-full"
+                  playsInline
                 >
-                  <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
-                </div>
-              )}
+                  <source src={videoSource} type={videoType} />
+                </video>
+                {showPlayOverlay && (
+                  <div
+                    className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      togglePlay();
+                    }}
+                  >
+                    <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             mediaType === 'image' && (
