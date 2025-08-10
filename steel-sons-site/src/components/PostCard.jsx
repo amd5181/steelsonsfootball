@@ -192,94 +192,82 @@ export default function PostCard({
 
   // Effect to initialize and manage video.js player
   useEffect(() => {
+    // We now initialize the player on the parent container, not the video tag itself.
+    // This allows the video.js player's root element to inherit our CSS classes correctly.
     if (mediaType === 'video' && videoRef.current && videoSource) {
       if (!playerRef.current) {
-        // Initialize video.js player
         playerRef.current = videojs(videoRef.current, {
-          controls: false, // Custom controls via overlay
+          controls: false,
           autoplay: false,
           preload: 'auto',
           responsive: true,
-          fluid: true,
+          fluid: true, // This is the key change to make the player responsive
           loop: true,
-          muted: true, // Start muted to allow autoplay without user interaction
+          muted: true,
           poster: posterUrl,
         });
 
         const player = playerRef.current;
-        const videoElement = player.el().querySelector('video');
 
         // NEW: Event handlers for more deliberate touch detection on mobile
         const handleTouchStart = (e) => {
-            // Store the initial touch position
             touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         };
 
         const handleTouchEnd = (e) => {
-            // Get the final touch position
             const endX = e.changedTouches[0].clientX;
             const endY = e.changedTouches[0].clientY;
-            // Calculate the distance moved
             const dx = Math.abs(endX - touchStartPos.current.x);
             const dy = Math.abs(endY - touchStartPos.current.y);
-
-            // Define a small threshold to distinguish a tap from a scroll
-            const touchThreshold = 10; // in pixels
+            const touchThreshold = 10;
 
             if (dx < touchThreshold && dy < touchThreshold) {
-                // If the movement was minimal, treat it as a deliberate tap
                 e.preventDefault();
                 e.stopPropagation();
                 togglePlay();
             }
         };
 
-        // Add event listeners to the video element
-        if (videoElement) {
-          // Add touch event listeners to the video element itself
-          videoElement.addEventListener('touchstart', handleTouchStart);
-          videoElement.addEventListener('touchend', handleTouchEnd);
-          // Keep the click listener for desktop users
-          videoElement.addEventListener('click', (e) => {
+        // Add event listeners to the player's element
+        const playerElement = player.el();
+        if (playerElement) {
+          playerElement.addEventListener('touchstart', handleTouchStart);
+          playerElement.addEventListener('touchend', handleTouchEnd);
+          playerElement.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
             togglePlay();
           });
         }
 
-        // Update overlay state based on player events
         player.on('play', () => setShowPlayOverlay(false));
         player.on('pause', () => setShowPlayOverlay(true));
-        setShowPlayOverlay(true); // Ensure overlay is shown initially
+        setShowPlayOverlay(true);
       } else {
-        // Update video source if it changes
         if (playerRef.current.currentSrc() !== videoSource) {
           playerRef.current.src({ src: videoSource, type: videoType });
           playerRef.current.poster(posterUrl);
-          setShowPlayOverlay(true); // Show overlay when source changes
+          setShowPlayOverlay(true);
         }
       }
     }
 
-    // Cleanup function for video.js player and event listeners
     return () => {
       if (playerRef.current) {
         const player = playerRef.current;
-        const videoElement = player.el().querySelector('video');
-        if (videoElement) {
-            // Remove event listeners
-            videoElement.removeEventListener('click', (e) => {
+        const playerElement = player.el();
+        if (playerElement) {
+            playerElement.removeEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 togglePlay();
             });
-            videoElement.removeEventListener('touchstart', () => {});
-            videoElement.removeEventListener('touchend', () => {});
+            playerElement.removeEventListener('touchstart', () => {});
+            playerElement.removeEventListener('touchend', () => {});
         }
-        playerRef.current.dispose(); // Dispose of the video.js player
+        playerRef.current.dispose();
         playerRef.current = null;
       }
-      // Clear global reference if this player was the one currently playing
       if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === playerRef.current) {
         currentPlayingPlayerInfo = null;
       }
@@ -703,29 +691,31 @@ export default function PostCard({
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            // New responsive container to maintain 16:9 aspect ratio
-            <div className="relative w-full pb-[56.25%] overflow-hidden">
-              <div data-vjs-player className="absolute inset-0">
-                <video
-                  ref={videoRef}
-                  className="video-js w-full h-full"
-                  playsInline
+            // A responsive container with 16:9 aspect ratio, which Video.js will now respect
+            // I've moved the video-js class here as per best practices.
+            <div
+              data-vjs-player
+              className="video-js w-full relative pb-[56.25%] overflow-hidden"
+              ref={videoRef}
+            >
+              <video
+                className="vjs-tech w-full h-full absolute inset-0 object-cover"
+                playsInline
+              >
+                <source src={videoSource} type={videoType} />
+              </video>
+              {showPlayOverlay && (
+                <div
+                  className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    togglePlay();
+                  }}
                 >
-                  <source src={videoSource} type={videoType} />
-                </video>
-                {showPlayOverlay && (
-                  <div
-                    className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-10"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      togglePlay();
-                    }}
-                  >
-                    <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
-                  </div>
-                )}
-              </div>
+                  <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
+                </div>
+              )}
             </div>
           ) : (
             mediaType === 'image' && (
