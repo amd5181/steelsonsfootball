@@ -398,8 +398,8 @@ export default function PostCard({
     }
   };
 
-  // Determine if the delete button should be visible for a guest
-  const canGuestDelete = name === 'Guest' && (Date.now() - createdAt) <= GUEST_DELETE_WINDOW;
+  const isWithinTimeWindow = (Date.now() - createdAt) <= GUEST_DELETE_WINDOW;
+  const canDelete = access === 'admin' || isWithinTimeWindow;
 
   const renderEmbed = () => {
     if (!embed) return null;
@@ -591,30 +591,25 @@ export default function PostCard({
             </div>
           )}
 
-          {/* Conditional rendering for delete options with proper spacing */}
-          {access === 'admin' ? (
-            // Admin dropdown menu
+          {/* The delete button is shown if the user is an admin OR if the post is within the 15-minute window */}
+          {canDelete && (
             <div className="relative" ref={adminDropdownRef}>
               <button
-                onClick={() => setShowAdminDropdown(!showAdminDropdown)}
-                className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                aria-label="Admin options"
+                onClick={handleDeletePost}
+                className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                title="Delete post"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="1"></circle>
-                  <circle cx="19" cy="12" r="1"></circle>
-                  <circle cx="5" cy="12" r="1"></circle>
+                  <path d="M3 6h18"></path>
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                  <line x1="10" x2="10" y1="11" y2="17"></line>
+                  <line x1="14" x2="14" y1="11" y2="17"></line>
                 </svg>
               </button>
-              {showAdminDropdown && (
+              {access === 'admin' && showAdminDropdown && (
                 <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
                   <div className="py-1">
-                    <button
-                      onClick={handleDeletePost}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-red-500"
-                    >
-                      Delete Post
-                    </button>
                     <button
                       onClick={handleResetReactions}
                       className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -625,21 +620,6 @@ export default function PostCard({
                 </div>
               )}
             </div>
-          ) : canGuestDelete && (
-            // Regular user delete icon (only visible for 15 mins)
-            <button
-              onClick={handleDeletePost}
-              className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-              title="Delete post"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 6h18"></path>
-                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                <line x1="10" x2="10" y1="11" y2="17"></line>
-                <line x1="14" x2="14" y1="11" y2="17"></line>
-              </svg>
-            </button>
           )}
         </div>
       </div>
