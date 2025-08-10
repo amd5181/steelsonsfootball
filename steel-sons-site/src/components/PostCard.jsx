@@ -17,7 +17,7 @@ import { parseEmbedUrl } from '../utils/embedParser';
 let currentPlayingPlayerInfo = null;
 
 // Initial emoji set for reactions
-const EMOJI_SET = { '❤️': 0, '\u{1F602}': 0, '🔥': 0, '👎': 0 };
+const EMOJI_SET = { '❤️': 0, '\u{1F602}': 0, '🔥': 0, '�': 0 };
 
 /**
  * Formats a timestamp into a localized date and time string.
@@ -126,37 +126,37 @@ export default function PostCard({
   useEffect(() => {
     // This effect handles video source logic and should only run when mediaUrl or mediaType changes
     if (mediaType === 'video' && mediaUrl) {
-        // Try to construct an HLS URL first
-        const basePath = mediaUrl.split('/upload/')[1]?.replace(/\.(mp4|mov)$/i, '');
-        const hlsUrl = `https://res.cloudinary.com/dsvpfi9te/video/upload/sp_auto/${basePath}.m3u8`;
-        const poster = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
-        setPosterUrl(poster);
+      // Try to construct an HLS URL first
+      const basePath = mediaUrl.split('/upload/')[1]?.replace(/\.(mp4|mov)$/i, '');
+      const hlsUrl = `https://res.cloudinary.com/dsvpfi9te/video/upload/sp_auto/${basePath}.m3u8`;
+      const poster = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
+      setPosterUrl(poster);
 
-        console.log('Attempting to load HLS video from:', hlsUrl);
-        fetch(hlsUrl, { method: 'HEAD' })
-            .then(res => {
-                if (res.ok) {
-                    console.log('HLS source found, setting video source to HLS.');
-                    setVideoSource(hlsUrl);
-                    setVideoType('application/x-mpegURL');
-                } else {
-                    console.log('HLS source not found, falling back to original MP4 URL.');
-                    setVideoSource(mediaUrl);
-                    setVideoType('video/mp4');
-                }
-            })
-            .catch(error => {
-                console.error('Error checking HLS source, falling back to MP4:', error);
-                setVideoSource(mediaUrl);
-                setVideoType('video/mp4');
-            });
+      console.log('Attempting to load HLS video from:', hlsUrl);
+      fetch(hlsUrl, { method: 'HEAD' })
+        .then(res => {
+          if (res.ok) {
+            console.log('HLS source found, setting video source to HLS.');
+            setVideoSource(hlsUrl);
+            setVideoType('application/x-mpegURL');
+          } else {
+            console.log('HLS source not found, falling back to original MP4 URL.');
+            setVideoSource(mediaUrl);
+            setVideoType('video/mp4');
+          }
+        })
+        .catch(error => {
+          console.error('Error checking HLS source, falling back to MP4:', error);
+          setVideoSource(mediaUrl);
+          setVideoType('video/mp4');
+        });
     } else {
-        // If mediaType is not a video or mediaUrl is null, clear the state
-        setVideoSource(null);
-        setVideoType(null);
-        setPosterUrl(null);
+      // If mediaType is not a video or mediaUrl is null, clear the state
+      setVideoSource(null);
+      setVideoType(null);
+      setPosterUrl(null);
     }
-}, [mediaUrl, mediaType]);
+  }, [mediaUrl, mediaType]);
 
   const togglePlay = useCallback(() => {
     const player = playerRef.current;
@@ -197,7 +197,7 @@ export default function PostCard({
           autoplay: false,
           preload: 'auto',
           responsive: true,
-          fluid: true, // Reverted to true for responsive behavior
+          fluid: true,
           loop: true,
           muted: true,
           poster: posterUrl,
@@ -639,16 +639,18 @@ export default function PostCard({
       <p className="text-gray-800 text-lg leading-relaxed whitespace-pre-line mt-2">{text}</p>
 
       {mediaUrl && (
-        <div className="mt-4 rounded-lg overflow-hidden relative w-full max-h-[500px] flex items-center justify-center">
+        <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            <div data-vjs-player className="relative w-full h-full">
-              <video
-                ref={videoRef}
-                className="video-js w-full h-full object-contain"
-                playsInline
-              >
-                <source src={videoSource} type={videoType} />
-              </video>
+            <div className="relative w-full aspect-video">
+              <div data-vjs-player className="absolute inset-0">
+                <video
+                  ref={videoRef}
+                  className="video-js vjs-theme-forest w-full h-full object-contain"
+                  playsInline
+                >
+                  <source src={videoSource} type={videoType} />
+                </video>
+              </div>
               {showPlayOverlay && (
                 <div
                   className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-10"
@@ -804,3 +806,4 @@ export default function PostCard({
     </div>
   );
 }
+�
