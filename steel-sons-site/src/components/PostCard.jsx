@@ -200,7 +200,7 @@ export default function PostCard({
           autoplay: false,
           preload: 'auto',
           responsive: true,
-          fluid: false, // IMPORTANT: disable fluid so our max-height is respected
+          fluid: true,
           loop: true,
           muted: true, // Start muted to allow autoplay without user interaction
           poster: posterUrl,
@@ -211,27 +211,27 @@ export default function PostCard({
 
         // NEW: Event handlers for more deliberate touch detection on mobile
         const handleTouchStart = (e) => {
-          // Store the initial touch position
-          touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            // Store the initial touch position
+            touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         };
 
         const handleTouchEnd = (e) => {
-          // Get the final touch position
-          const endX = e.changedTouches[0].clientX;
-          const endY = e.changedTouches[0].clientY;
-          // Calculate the distance moved
-          const dx = Math.abs(endX - touchStartPos.current.x);
-          const dy = Math.abs(endY - touchStartPos.current.y);
+            // Get the final touch position
+            const endX = e.changedTouches[0].clientX;
+            const endY = e.changedTouches[0].clientY;
+            // Calculate the distance moved
+            const dx = Math.abs(endX - touchStartPos.current.x);
+            const dy = Math.abs(endY - touchStartPos.current.y);
 
-          // Define a small threshold to distinguish a tap from a scroll
-          const touchThreshold = 10; // in pixels
+            // Define a small threshold to distinguish a tap from a scroll
+            const touchThreshold = 10; // in pixels
 
-          if (dx < touchThreshold && dy < touchThreshold) {
-            // If the movement was minimal, treat it as a deliberate tap
-            e.preventDefault();
-            e.stopPropagation();
-            togglePlay();
-          }
+            if (dx < touchThreshold && dy < touchThreshold) {
+                // If the movement was minimal, treat it as a deliberate tap
+                e.preventDefault();
+                e.stopPropagation();
+                togglePlay();
+            }
         };
 
         // Add event listeners to the video element
@@ -267,14 +267,14 @@ export default function PostCard({
         const player = playerRef.current;
         const videoElement = player.el().querySelector('video');
         if (videoElement) {
-          // Remove event listeners
-          videoElement.removeEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            togglePlay();
-          });
-          videoElement.removeEventListener('touchstart', () => {});
-          videoElement.removeEventListener('touchend', () => {});
+            // Remove event listeners
+            videoElement.removeEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                togglePlay();
+            });
+            videoElement.removeEventListener('touchstart', () => {});
+            videoElement.removeEventListener('touchend', () => {});
         }
         playerRef.current.dispose(); // Dispose of the video.js player
         playerRef.current = null;
@@ -621,7 +621,7 @@ export default function PostCard({
     if (type === 'video') {
       return (
         <div className="mt-4">
-          <video src={url} controls className="w-full rounded-lg max-h-[100px]" playsInline />
+          <video src={url} controls className="w-full rounded-lg max-h-[500px]" playsInline />
         </div>
       );
     }
@@ -703,11 +703,10 @@ export default function PostCard({
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            <div data-vjs-player className="relative">{/* removed wrapper max-h to avoid fighting player sizing */}
+            <div data-vjs-player className="relative">
               <video
                 ref={videoRef}
-                className="video-js ss-player rounded-lg w-full object-contain"
-                style={{ maxHeight: 'min(80vh, 600px)' }}
+                className="video-js rounded-lg max-h-[500px] w-full"
                 playsInline
               >
                 <source src={videoSource} type={videoType} />
@@ -841,40 +840,30 @@ export default function PostCard({
             placeholder="Add a comment..."
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
-            className="flex-grow p-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-rose-500"
+            className="flex-1 border rounded-lg px-3 py-1 text-sm focus:ring-rose-500 focus:border-rose-500"
           />
-          <button
-            type="submit"
-            className="px-4 py-2 bg-rose-500 text-white rounded-full hover:bg-rose-600 transition"
-          >
-            Comment
+          <button type="submit" className="text-rose-500 font-semibold text-sm px-3 py-1 rounded-lg hover:bg-rose-50 transition">
+            Post
           </button>
         </form>
-      </div>
 
-      {comments.length > 0 && (
-        <div className="mt-4 space-y-2">
-          {comments.map((comment, index) => (
-            <div key={comment.id} className="flex items-start gap-2 bg-gray-50 p-3 rounded-lg relative group">
-              <span className="text-gray-800 text-sm">{comment.text}</span>
+        <ul className="mt-3 space-y-1 text-sm text-gray-700">
+          {comments.map((c) => (
+            <li key={c.id} className="bg-gray-100 rounded-md p-2 flex justify-between items-center">
+              <span>{c.text}</span>
               {access === 'admin' && (
                 <button
-                  onClick={() => handleDeleteComment(comment.id)}
-                  className="absolute right-2 top-2 text-sm text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => handleDeleteComment(c.id)}
+                  className="ml-2 text-red-500 text-xs hover:underline"
                   aria-label="Delete comment"
                 >
-                  &times;
+                  ✖
                 </button>
               )}
-            </div>
+            </li>
           ))}
-        </div>
-      )}
-
+        </ul>
+      </div>
     </div>
   );
 }
-
-// Helper function to handle base64 encoding/decoding and other utilities
-// This is not part of the main component but is often needed for full app functionality.
-// This is left as is for now.
