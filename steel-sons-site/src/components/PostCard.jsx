@@ -83,7 +83,8 @@ const useVideoPlayer = (playerRef, videoRef, mediaUrl, mediaType, postId) => {
         setShowPoster(false);
       });
       player.on('pause', () => setShowPlayOverlay(true));
-
+      
+      // Unmute on first playback
       player.one('playing', () => {
         try { player.muted(false); } catch {}
         setShowPoster(false);
@@ -693,12 +694,11 @@ export default function PostCard({
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            // The entire container is now the tap target
+            // The entire container is now the tap/click target
             <div
               className="relative rounded-lg cursor-pointer"
               style={{ aspectRatio: aspect || 16 / 9, width: '100%' }}
               onClick={handleVideoInteraction}
-              onTouchStart={handleVideoInteraction}
             >
               {/* Poster image stays on top until playback actually starts */}
               {showPoster && (
@@ -845,7 +845,7 @@ export default function PostCard({
             type="text"
             placeholder="Add a comment..."
             value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
+            onChange={(e) => e.preventDefault()}
             className="flex-1 border rounded-lg px-3 py-1 text-sm focus:ring-rose-500 focus:border-rose-500"
           />
           <button type="submit" className="text-rose-500 font-semibold text-sm px-3 py-1 rounded-lg hover:bg-rose-50 transition">
