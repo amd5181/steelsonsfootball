@@ -845,7 +845,7 @@ export default function PostCard({
             type="text"
             placeholder="Add a comment..."
             value={newComment}
-            onChange={(e) => e.preventDefault()}
+            onChange={(e) => setNewComment(e.target.value)}
             className="flex-1 border rounded-lg px-3 py-1 text-sm focus:ring-rose-500 focus:border-rose-500"
           />
           <button type="submit" className="text-rose-500 font-semibold text-sm px-3 py-1 rounded-lg hover:bg-rose-50 transition">
