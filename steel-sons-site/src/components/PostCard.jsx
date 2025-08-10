@@ -75,6 +75,7 @@ export default function PostCard({
   const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false);
   const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false);
   const [showAdminDropdown, setShowAdminDropdown] = useState(false);
+  const [isScrolling, setIsScrolling] = useState(false); // New state to track scrolling
   const adminDropdownRef = useRef(null);
 
   const postRef = doc(db, 'posts', postId);
@@ -218,12 +219,27 @@ export default function PostCard({
         const handleInteraction = (e) => {
           e.preventDefault();
           e.stopPropagation();
-          togglePlay();
+          // Only toggle play if it was a quick tap, not a scroll
+          if (!isScrolling) {
+            togglePlay();
+          }
         };
 
         if (videoElement) {
-          videoElement.addEventListener('click', handleInteraction);
+          // New event listeners to detect scrolling
+          const handleTouchStart = () => setIsScrolling(false);
+          const handleTouchMove = () => setIsScrolling(true);
+          const handleMouseClick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            togglePlay();
+          }
+
+          // Use the `handleInteraction` for `touchend`
+          videoElement.addEventListener('touchstart', handleTouchStart);
+          videoElement.addEventListener('touchmove', handleTouchMove);
           videoElement.addEventListener('touchend', handleInteraction);
+          videoElement.addEventListener('click', handleMouseClick);
         }
 
         player.on('play', () => setShowPlayOverlay(false));
@@ -249,6 +265,8 @@ export default function PostCard({
         if (videoElement) {
           videoElement.removeEventListener('click', () => {});
           videoElement.removeEventListener('touchend', () => {});
+          videoElement.removeEventListener('touchstart', () => {});
+          videoElement.removeEventListener('touchmove', () => {});
         }
         player.dispose(); // Dispose of the player
         playerRef.current = null;
@@ -258,7 +276,7 @@ export default function PostCard({
         currentPlayingPlayerInfo = null;
       }
     };
-  }, [videoSource, videoType, mediaType, posterUrl, togglePlay]);
+  }, [videoSource, videoType, mediaType, posterUrl, togglePlay, isScrolling]);
 
   useEffect(() => {
     if (embed?.type === 'twitter') {
