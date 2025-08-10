@@ -176,20 +176,24 @@ export default function PostCard({
     if (player.paused()) {
       player.play().then(() => {
         player.muted(false);
-        player.poster('');
+        player.poster(''); // Only remove poster on successful play
         setShowPlayOverlay(false);
         currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
       }).catch(err => {
         console.error('Video play error:', err);
+        // On error, restore the poster and show the overlay
+        player.poster(posterUrl);
         setShowPlayOverlay(true);
+        currentPlayingPlayerInfo = null;
       });
     } else {
       player.pause();
       setShowPlayOverlay(true);
       player.muted(true);
+      player.poster(posterUrl); // Restore poster on pause
       currentPlayingPlayerInfo = null;
     }
-  }, []);
+  }, [posterUrl]);
 
   useEffect(() => {
     if (mediaType === 'video' && videoRef.current && videoSource) {
@@ -223,10 +227,35 @@ export default function PostCard({
         player.on('pause', () => setShowPlayOverlay(true));
         setShowPlayOverlay(true);
       } else {
+        // If the source changes, dispose and re-initialize the player
         if (playerRef.current.currentSrc() !== videoSource) {
-          playerRef.current.src({ src: videoSource, type: videoType });
-          playerRef.current.poster(posterUrl);
-          setShowPlayOverlay(true);
+          playerRef.current.dispose();
+          playerRef.current = null;
+          playerRef.current = videojs(videoRef.current, {
+            controls: false,
+            autoplay: false,
+            preload: 'auto',
+            responsive: true,
+            fill: true,
+            loop: true,
+            muted: true,
+            poster: posterUrl,
+          });
+
+          const player = playerRef.current;
+          const videoElement = player.el().querySelector('video');
+
+          const handleInteraction = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            togglePlay();
+          };
+          if (videoElement) {
+            videoElement.addEventListener('click', handleInteraction);
+            videoElement.addEventListener('touchend', handleInteraction);
+          }
+          player.on('play', () => setShowPlayOverlay(false));
+          player.on('pause', () => setShowPlayOverlay(true));
         }
       }
     }
