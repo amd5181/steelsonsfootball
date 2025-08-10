@@ -130,8 +130,10 @@ const useVideoPlayer = (playerRef, videoRef, mediaUrl, mediaType, postId) => {
     };
   }, [videoRef, videoSource, videoType, posterUrl, mediaUrl]);
 
-  // Play button click handler
-  const handlePlayClick = useCallback(async () => {
+  /**
+   * Toggles play/pause and handles other videos.
+   */
+  const handleVideoInteraction = useCallback(async () => {
     const player = playerRef.current;
     if (!player) return;
 
@@ -142,25 +144,30 @@ const useVideoPlayer = (playerRef, videoRef, mediaUrl, mediaType, postId) => {
       currentPlayingPlayerInfo.player.muted(true);
     }
 
-    try {
-      await player.play();
-      setShowPlayOverlay(false);
-      currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
-    } catch (err) {
-      console.warn('Play was rejected by the browser.', err);
-      // Fallback to direct MP4 source if HLS fails to play
+    if (player.paused()) {
       try {
-        if (player.currentType() !== 'video/mp4' && mediaUrl) {
-          player.src({ src: mediaUrl, type: 'video/mp4' });
-          if (posterUrl) player.poster(posterUrl);
-          await player.play().catch(() => {});
-          setShowPlayOverlay(false);
-          currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
+        await player.play();
+        setShowPlayOverlay(false);
+        currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
+      } catch (err) {
+        console.warn('Play was rejected by the browser.', err);
+        // Fallback to direct MP4 source if HLS fails to play
+        try {
+          if (player.currentType() !== 'video/mp4' && mediaUrl) {
+            player.src({ src: mediaUrl, type: 'video/mp4' });
+            if (posterUrl) player.poster(posterUrl);
+            await player.play().catch(() => {});
+            setShowPlayOverlay(false);
+            currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
+          }
+        } catch (err2) {
+          console.error('Fallback play failed:', err2);
+          setShowPlayOverlay(true);
         }
-      } catch (err2) {
-        console.error('Fallback play failed:', err2);
-        setShowPlayOverlay(true);
       }
+    } else {
+      player.pause();
+      setShowPlayOverlay(true);
     }
   }, [playerRef, mediaUrl, posterUrl]);
 
@@ -169,7 +176,7 @@ const useVideoPlayer = (playerRef, videoRef, mediaUrl, mediaType, postId) => {
     aspect,
     showPoster,
     posterUrl,
-    handlePlayClick,
+    handleVideoInteraction,
     setAspect,
     setShowPoster,
     videoSource,
@@ -219,7 +226,7 @@ export default function PostCard({
     aspect,
     showPoster,
     posterUrl,
-    handlePlayClick,
+    handleVideoInteraction,
     setAspect,
     setShowPoster,
     videoSource,
@@ -686,10 +693,12 @@ export default function PostCard({
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            // Size is pre-locked via CSS aspect-ratio; no “blow up” on play.
+            // The entire container is now the tap target
             <div
-              className="relative rounded-lg"
+              className="relative rounded-lg cursor-pointer"
               style={{ aspectRatio: aspect || 16 / 9, width: '100%' }}
+              onClick={handleVideoInteraction}
+              onTouchStart={handleVideoInteraction}
             >
               {/* Poster image stays on top until playback actually starts */}
               {showPoster && (
@@ -717,9 +726,7 @@ export default function PostCard({
               </div>
               {showPlayOverlay && (
                 <div
-                  className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-20"
-                  onClick={handlePlayClick}
-                  style={{ touchAction: 'pan-y' }}
+                  className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 z-20"
                 >
                   <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
                 </div>
