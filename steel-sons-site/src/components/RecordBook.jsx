@@ -18,12 +18,12 @@ export default function RecordBook() {
         holders: [{ team: 'Andrew David', year: '2023' }],
       },
       {
-        category: 'Most Points Per Game Against in a Season',
+        category: 'Most Points Against Per Game in a Season',
         value: '124.13',
         holders: [{ team: 'Dylan Frank', year: '2021' }],
       },
       {
-        category: 'Fewest Points Per Game Against in a Season',
+        category: 'Fewest Points Against Per Game in a Season',
         value: '88.90',
         holders: [{ team: 'Matt Nese', year: '2023' }],
       },
