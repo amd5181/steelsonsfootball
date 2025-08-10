@@ -155,8 +155,8 @@ export default function PostCard({
     setShowPoster(true);
   }, [mediaUrl, mediaType]);
 
-  // Unified play/pause toggle that uses the player's API
-  const togglePlay = useCallback(async (e) => {
+  // Handle the play click directly on the overlay
+  const handlePlayClick = async (e) => {
     const player = playerRef.current;
     if (!player) return;
 
@@ -167,33 +167,27 @@ export default function PostCard({
       currentPlayingPlayerInfo.player.muted(true);
     }
 
-    if (player.paused()) {
+    try {
+      await player.play();
+      setShowPlayOverlay(false);
+      currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
+    } catch (err) {
+      console.warn('play() rejected; attempting MP4 fallback', err);
+      // Fallback to direct MP4 source if HLS fails to play
       try {
-        await player.play();
-        setShowPlayOverlay(false);
-        currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
-      } catch (err) {
-        console.warn('play() rejected; attempting MP4 fallback', err);
-        try {
-          if (mediaUrl) {
-            player.src({ src: mediaUrl, type: 'video/mp4' });
-            if (posterUrl) player.poster(posterUrl);
-            await player.play();
-            setShowPlayOverlay(false);
-            currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
-          }
-        } catch (err2) {
-          console.error('Fallback play failed:', err2);
-          setShowPlayOverlay(true);
+        if (mediaUrl) {
+          player.src({ src: mediaUrl, type: 'video/mp4' });
+          if (posterUrl) player.poster(posterUrl);
+          await player.play().catch(() => {});
+          setShowPlayOverlay(false);
+          currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
         }
+      } catch (err2) {
+        console.error('Fallback play failed:', err2);
+        setShowPlayOverlay(true);
       }
-    } else {
-      player.pause();
-      setShowPlayOverlay(true);
-      player.muted(true);
-      currentPlayingPlayerInfo = null;
     }
-  }, [mediaUrl, posterUrl]);
+  };
 
   // Initialize and manage video.js player
   useEffect(() => {
@@ -281,7 +275,7 @@ export default function PostCard({
         playerRef.current = null;
       }
     };
-  }, [videoSource, videoType, mediaType, posterUrl, togglePlay, mediaUrl]);
+  }, [videoSource, videoType, mediaType, posterUrl, handlePlayClick, mediaUrl]);
 
   // Twitter widgets
   useEffect(() => {
@@ -712,7 +706,7 @@ export default function PostCard({
               {showPlayOverlay && (
                 <div
                   className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-20"
-                  onClick={togglePlay}
+                  onClick={handlePlayClick}
                   style={{ touchAction: 'pan-y' }}
                 >
                   <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
