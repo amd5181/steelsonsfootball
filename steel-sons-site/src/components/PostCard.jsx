@@ -55,6 +55,7 @@ export default function PostCard({
 }) {
   const videoRef = useRef(null);
   const playerRef = useRef(null);
+  const handlerRef = useRef(null); // stable tap handler reference
   const [videoSource, setVideoSource] = useState(null);
   const [videoType, setVideoType] = useState(null);
   const [posterUrl, setPosterUrl] = useState(null);
@@ -155,8 +156,8 @@ export default function PostCard({
     setShowPoster(true);
   }, [mediaUrl, mediaType]);
 
-  // Handle the play click directly on the overlay
-  const handlePlayClick = async (e) => {
+  // Gesture-based play/pause toggle that ignores scrolls, with runtime fallback to MP4
+  const togglePlayTapAware = useCallback(async (e) => {
     const player = playerRef.current;
     if (!player) return;
 
@@ -167,27 +168,33 @@ export default function PostCard({
       currentPlayingPlayerInfo.player.muted(true);
     }
 
-    try {
-      await player.play();
-      setShowPlayOverlay(false);
-      currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
-    } catch (err) {
-      console.warn('play() rejected; attempting MP4 fallback', err);
-      // Fallback to direct MP4 source if HLS fails to play
+    if (player.paused()) {
       try {
-        if (mediaUrl) {
-          player.src({ src: mediaUrl, type: 'video/mp4' });
-          if (posterUrl) player.poster(posterUrl);
-          await player.play().catch(() => {});
-          setShowPlayOverlay(false);
-          currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
+        await player.play();
+        setShowPlayOverlay(false);
+        currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
+      } catch (err) {
+        console.warn('play() rejected; attempting MP4 fallback', err);
+        try {
+          if (mediaUrl) {
+            player.src({ src: mediaUrl, type: 'video/mp4' });
+            if (posterUrl) player.poster(posterUrl);
+            await player.play();
+            setShowPlayOverlay(false);
+            currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
+          }
+        } catch (err2) {
+          console.error('Fallback play failed:', err2);
+          setShowPlayOverlay(true);
         }
-      } catch (err2) {
-        console.error('Fallback play failed:', err2);
-        setShowPlayOverlay(true);
       }
+    } else {
+      player.pause();
+      setShowPlayOverlay(true);
+      player.muted(true);
+      currentPlayingPlayerInfo = null;
     }
-  };
+  }, [mediaUrl, posterUrl]);
 
   // Initialize and manage video.js player
   useEffect(() => {
@@ -253,6 +260,57 @@ export default function PostCard({
         } catch {}
       };
       player.on('error', handleError);
+
+      // Build a tap-aware handler once and keep it stable
+      handlerRef.current = (() => {
+        let startX = 0, startY = 0, startT = 0, moved = false;
+
+        const onPointerDown = (ev) => {
+          startX = ev.clientX ?? (ev.touches?.[0]?.clientX || 0);
+          startY = ev.clientY ?? (ev.touches?.[0]?.clientY || 0);
+          startT = Date.now();
+          moved = false;
+        };
+
+        const onPointerMove = (ev) => {
+          const x = ev.clientX ?? (ev.touches?.[0]?.clientX || 0);
+          const y = ev.clientY ?? (ev.touches?.[0]?.clientY || 0);
+          if (Math.abs(x - startX) > 10 || Math.abs(y - startY) > 10) moved = true;
+        };
+
+        const onPointerUp = (ev) => {
+          const dur = Date.now() - startT;
+          const x = ev.clientX ?? (ev.changedTouches?.[0]?.clientX || 0);
+          const y = ev.clientY ?? (ev.changedTouches?.[0]?.clientY || 0);
+
+          if (!moved && dur < 300) {
+            const rect = player.el().getBoundingClientRect();
+            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+              togglePlayTapAware(ev);
+            }
+          }
+        };
+
+        return { onPointerDown, onPointerMove, onPointerUp };
+      })();
+
+      const videoEl = player.el().querySelector('video');
+      if (videoEl) {
+        // CORS + inline playback hints
+        videoEl.setAttribute('crossorigin', 'anonymous');
+        videoEl.setAttribute('playsinline', 'true');
+        videoEl.setAttribute('webkit-playsinline', 'true');
+
+        // Use pointer/touch listeners tuned for mobile scroll behavior
+        videoEl.addEventListener('touchstart', handlerRef.current.onPointerDown, { passive: true });
+        videoEl.addEventListener('touchmove', handlerRef.current.onPointerMove, { passive: true });
+        videoEl.addEventListener('touchend', handlerRef.current.onPointerUp, { passive: true });
+        videoEl.addEventListener('mousedown', handlerRef.current.onPointerDown);
+        videoEl.addEventListener('mousemove', handlerRef.current.onPointerMove);
+        videoEl.addEventListener('mouseup', handlerRef.current.onPointerUp);
+        // Hint to browsers: vertical pan allowed (don’t treat as pinch/zoom area)
+        videoEl.style.touchAction = 'pan-y';
+      }
     } else {
       // Update source when it changes
       const player = playerRef.current;
@@ -267,15 +325,27 @@ export default function PostCard({
     return () => {
       if (playerRef.current) {
         const player = playerRef.current;
+        const videoEl = player.el()?.querySelector('video');
+
+        if (videoEl && handlerRef.current) {
+          videoEl.removeEventListener('touchstart', handlerRef.current.onPointerDown);
+          videoEl.removeEventListener('touchmove', handlerRef.current.onPointerMove);
+          videoEl.removeEventListener('touchend', handlerRef.current.onPointerUp);
+          videoEl.removeEventListener('mousedown', handlerRef.current.onPointerDown);
+          videoEl.removeEventListener('mousemove', handlerRef.current.onPointerMove);
+          videoEl.removeEventListener('mouseup', handlerRef.current.onPointerUp);
+        }
+
         // If this player was active, clear global ref
         if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === player) {
           currentPlayingPlayerInfo = null;
         }
         player.dispose();
         playerRef.current = null;
+        handlerRef.current = null;
       }
     };
-  }, [videoSource, videoType, mediaType, posterUrl, handlePlayClick, mediaUrl]);
+  }, [videoSource, videoType, mediaType, posterUrl, togglePlayTapAware, mediaUrl]);
 
   // Twitter widgets
   useEffect(() => {
@@ -706,7 +776,11 @@ export default function PostCard({
               {showPlayOverlay && (
                 <div
                   className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-20"
-                  onClick={handlePlayClick}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    togglePlayTapAware(e);
+                  }}
                   style={{ touchAction: 'pan-y' }}
                 >
                   <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
