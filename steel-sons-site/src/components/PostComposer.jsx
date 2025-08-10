@@ -270,14 +270,14 @@ export default function PostComposer({ onPost }) {
         <>
           <input
             type="text"
-            placeholder="Players/Positions Giving Away"
+            placeholder="Player(s)/Position(s) Giving Away"
             value={giving}
             onChange={(e) => setGiving(e.target.value)}
             className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
           />
           <input
             type="text"
-            placeholder="Players/Positions Seeking"
+            placeholder="Player(s)/Position(s) Seeking"
             value={seeking}
             onChange={(e) => setSeeking(e.target.value)}
             className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
