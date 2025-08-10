@@ -6,11 +6,9 @@ import {
   updateDoc,
   deleteDoc,
   increment,
-  onSnapshot, // Import onSnapshot for real-time updates
+  onSnapshot,
 } from 'firebase/firestore';
-// Assuming db is initialized elsewhere, e.g., in a separate firebase.js
-// import { initializeApp } from 'firebase/app'; // Not needed here as db is imported
-import { db } from '../lib/firebase'; // Assuming db is initialized elsewhere
+import { db } from '../lib/firebase';
 import { parseEmbedUrl } from '../utils/embedParser';
 
 
@@ -71,17 +69,14 @@ export default function PostCard({
   const [reactions, setReactions] = useState(EMOJI_SET);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); // State for custom delete confirmation
-  const [isLoading, setIsLoading] = useState(true); // Loading state for post data
-  const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false); // State to track Twitter embed failure
-  const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false); // State to track Instagram embed failure
-
-  // NEW: State to track touch start position for distinguishing taps from scrolls
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false);
+  const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false);
   const touchStartPos = useRef({ x: 0, y: 0 });
 
   const postRef = doc(db, 'posts', postId);
 
-  // Effect to fetch initial post data and set up real-time listener
   useEffect(() => {
     setIsLoading(true);
     const unsubscribe = onSnapshot(postRef, (snap) => {
@@ -96,16 +91,15 @@ export default function PostCard({
             notes: data.notes || '',
           });
         } else {
-          setTradeData(null); // Clear trade data if post type changes
+          setTradeData(null);
         }
 
         if (data.type === 'poll') {
           setPollData(data.poll);
-          // Check localStorage for vote status. Note: localStorage is client-side only.
           const voted = localStorage.getItem(`voted-${postId}`);
           setHasVoted(!!voted);
         } else {
-          setPollData(null); // Clear poll data if post type changes
+          setPollData(null);
         }
 
         const fromFirestore = data.reactions || {};
@@ -113,13 +107,11 @@ export default function PostCard({
         setReactions(mergedReactions);
         setComments(data.comments || []);
         setEmbed(data.embed || null);
-        console.log("PostCard - Fetched embed data:", data.embed); // Log embed data
-        setTwitterEmbedFailed(false); // Reset failure state on new data
-        setInstagramEmbedFailed(false); // Reset failure state for Instagram
+        console.log("PostCard - Fetched embed data:", data.embed);
+        setTwitterEmbedFailed(false);
+        setInstagramEmbedFailed(false);
       } else {
-        // Handle case where post might have been deleted
         console.log("Post does not exist or has been deleted.");
-        // Optionally, trigger onUpdate to remove the card from the UI
         onUpdate?.();
       }
       setIsLoading(false);
@@ -128,10 +120,9 @@ export default function PostCard({
       setIsLoading(false);
     });
 
-    return () => unsubscribe(); // Cleanup listener on unmount
-  }, [postId, onUpdate]); // onUpdate added as dependency for cleanup if it changes
+    return () => unsubscribe();
+  }, [postId, onUpdate]);
 
-  // Effect to handle video source and type detection
   useEffect(() => {
     if (mediaType === 'video' && mediaUrl) {
       const basePath = mediaUrl.split('/upload/')[1]?.replace(/\.(mp4|mov)$/i, '');
@@ -140,14 +131,12 @@ export default function PostCard({
 
       setPosterUrl(poster);
 
-      // Check for HLS availability first
       fetch(hlsUrl, { method: 'HEAD' })
         .then(res => {
           if (res.ok) {
             setVideoSource(hlsUrl);
             setVideoType('application/x-mpegURL');
           } else {
-            // Fallback to original MP4 if HLS is not available
             setVideoSource(mediaUrl);
             setVideoType('video/mp4');
           }
@@ -160,86 +149,72 @@ export default function PostCard({
     }
   }, [mediaUrl, mediaType]);
 
-  // Callback to toggle video play/pause
   const togglePlay = useCallback(() => {
     const player = playerRef.current;
     if (!player) return;
 
-    // Pause any other currently playing video
     if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player !== player) {
       currentPlayingPlayerInfo.player.pause();
       currentPlayingPlayerInfo.setShowOverlay(true);
-      currentPlayingPlayerInfo.player.muted(true); // Mute when pausing others
+      currentPlayingPlayerInfo.player.muted(true);
     }
 
     if (player.paused()) {
       player.play().then(() => {
-        player.muted(false); // Unmute when playing
-        player.poster(''); // Hide poster after play starts
+        player.muted(false);
+        player.poster('');
         setShowPlayOverlay(false);
         currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
       }).catch(err => {
         console.error('Video play error:', err);
-        setShowPlayOverlay(true); // Show overlay if play fails
+        setShowPlayOverlay(true);
       });
     } else {
       player.pause();
       setShowPlayOverlay(true);
-      player.muted(true); // Mute when paused
+      player.muted(true);
       currentPlayingPlayerInfo = null;
     }
   }, []);
 
-  // Effect to initialize and manage video.js player
   useEffect(() => {
     if (mediaType === 'video' && videoRef.current && videoSource) {
       if (!playerRef.current) {
-        // Initialize video.js player
         playerRef.current = videojs(videoRef.current, {
-          controls: false, // Custom controls via overlay
+          controls: false,
           autoplay: false,
           preload: 'auto',
           responsive: true,
           fluid: true,
           loop: true,
-          muted: true, // Start muted to allow autoplay without user interaction
+          muted: true,
           poster: posterUrl,
         });
 
         const player = playerRef.current;
         const videoElement = player.el().querySelector('video');
 
-        // NEW: Event handlers for more deliberate touch detection on mobile
         const handleTouchStart = (e) => {
-            // Store the initial touch position
-            touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         };
 
         const handleTouchEnd = (e) => {
-            // Get the final touch position
-            const endX = e.changedTouches[0].clientX;
-            const endY = e.changedTouches[0].clientY;
-            // Calculate the distance moved
-            const dx = Math.abs(endX - touchStartPos.current.x);
-            const dy = Math.abs(endY - touchStartPos.current.y);
+          const endX = e.changedTouches[0].clientX;
+          const endY = e.changedTouches[0].clientY;
+          const dx = Math.abs(endX - touchStartPos.current.x);
+          const dy = Math.abs(endY - touchStartPos.current.y);
+          const touchThreshold = 10;
 
-            // Define a small threshold to distinguish a tap from a scroll
-            const touchThreshold = 10; // in pixels
-
-            if (dx < touchThreshold && dy < touchThreshold) {
-                // If the movement was minimal, treat it as a deliberate tap
-                e.preventDefault();
-                e.stopPropagation();
-                togglePlay();
-            }
+          if (dx < touchThreshold && dy < touchThreshold) {
+            e.preventDefault();
+            e.stopPropagation();
+            togglePlay();
+          }
         };
 
-        // Add event listeners to the video element
         if (videoElement) {
-          // Add touch event listeners to the video element itself
           videoElement.addEventListener('touchstart', handleTouchStart);
           videoElement.addEventListener('touchend', handleTouchEnd);
-          // Keep the click listener for desktop users
           videoElement.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -247,46 +222,40 @@ export default function PostCard({
           });
         }
 
-        // Update overlay state based on player events
         player.on('play', () => setShowPlayOverlay(false));
         player.on('pause', () => setShowPlayOverlay(true));
-        setShowPlayOverlay(true); // Ensure overlay is shown initially
+        setShowPlayOverlay(true);
       } else {
-        // Update video source if it changes
         if (playerRef.current.currentSrc() !== videoSource) {
           playerRef.current.src({ src: videoSource, type: videoType });
           playerRef.current.poster(posterUrl);
-          setShowPlayOverlay(true); // Show overlay when source changes
+          setShowPlayOverlay(true);
         }
       }
     }
 
-    // Cleanup function for video.js player and event listeners
     return () => {
       if (playerRef.current) {
         const player = playerRef.current;
         const videoElement = player.el().querySelector('video');
         if (videoElement) {
-            // Remove event listeners
-            videoElement.removeEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                togglePlay();
-            });
-            videoElement.removeEventListener('touchstart', () => {});
-            videoElement.removeEventListener('touchend', () => {});
+          videoElement.removeEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            togglePlay();
+          });
+          videoElement.removeEventListener('touchstart', () => {});
+          videoElement.removeEventListener('touchend', () => {});
         }
-        playerRef.current.dispose(); // Dispose of the video.js player
+        playerRef.current.dispose();
         playerRef.current = null;
       }
-      // Clear global reference if this player was the one currently playing
       if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === playerRef.current) {
         currentPlayingPlayerInfo = null;
       }
     };
   }, [videoSource, videoType, mediaType, posterUrl, togglePlay]);
 
-  // Effect to handle Twitter widget loading and rendering
   useEffect(() => {
     if (embed?.type === 'twitter') {
       const loadTwitterWidgets = () => {
@@ -333,13 +302,10 @@ export default function PostCard({
     }
   }, [embed, postId]);
 
-  // NEW: Effect to handle Instagram widget loading and rendering
   useEffect(() => {
     if (embed?.type === 'instagram') {
       const loadInstagramWidgets = () => {
-        // Instagram's script uses window.instgrm.Embeds.process()
         if (window.instgrm && window.instgrm.Embeds) {
-          // A small delay to ensure the blockquote is in the DOM before processing
           setTimeout(() => {
             try {
               window.instgrm.Embeds.process();
@@ -356,7 +322,6 @@ export default function PostCard({
         }
       };
 
-      // Check if instgrm object exists, if not, load the script
       if (typeof window.instgrm === 'undefined') {
         console.log("Instagram Embed - Loading embed.js script...");
         const script = document.createElement('script');
@@ -366,7 +331,7 @@ export default function PostCard({
         document.body.appendChild(script);
         script.onload = () => {
           console.log("Instagram Embed - embed.js script loaded.");
-          loadInstagramWidgets(); // Process widgets once script is loaded
+          loadInstagramWidgets();
         };
         script.onerror = (e) => {
           console.error("Instagram Embed - Failed to load embed.js script:", e);
@@ -377,43 +342,32 @@ export default function PostCard({
         loadInstagramWidgets();
       }
     }
-  }, [embed, postId]); // Depend on embed and postId to re-run when they change
+  }, [embed, postId]);
 
-
-  /**
-   * Handles user reaction to the post.
-   * @param {string} emoji - The emoji character reacted with.
-   */
   const handleReaction = async (emoji) => {
     try {
-      // Optimistic UI update
       setReactions(prev => ({ ...prev, [emoji]: (prev[emoji] || 0) + 1 }));
       await updateDoc(postRef, {
         [`reactions.${emoji}`]: increment(1),
       });
     } catch (error) {
       console.error("Error updating reaction:", error);
-      // Revert optimistic update on error
       setReactions(prev => ({ ...prev, [emoji]: (prev[emoji] || 0) - 1 }));
     }
   };
 
-  /**
-   * Handles submission of a new comment.
-   * @param {Event} e - The form submission event.
-   */
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
     if (!newComment.trim()) return;
 
     const comment = {
       text: newComment.trim(),
-      createdAt: Date.now(), // Using Date.now() for simplicity, Firestore Timestamp is also an option
+      createdAt: Date.now(),
       id: crypto.randomUUID(),
     };
 
     const updated = [...comments, comment];
-    setComments(updated); // Optimistic UI update
+    setComments(updated);
     setNewComment('');
 
     try {
@@ -422,87 +376,67 @@ export default function PostCard({
       });
     } catch (error) {
       console.error("Error adding comment:", error);
-      // Revert optimistic update on error
       setComments(comments);
     }
   };
 
-  /**
-   * Initiates the post deletion process, showing a confirmation modal.
-   */
   const handleDeletePost = () => {
     setShowDeleteConfirm(true);
   };
 
-  /**
-   * Confirms and performs post deletion.
-   */
   const confirmDeletePost = async () => {
     try {
       await deleteDoc(postRef);
-      onUpdate?.(); // Notify parent component of deletion
+      onUpdate?.();
     } catch (error) {
       console.error("Error deleting post:", error);
     } finally {
-      setShowDeleteConfirm(false); // Hide confirmation modal
+      setShowDeleteConfirm(false);
     }
   };
 
-  /**
-   * Resets all reactions on the post.
-   */
   const handleResetReactions = async () => {
     try {
       await updateDoc(postRef, { reactions: EMOJI_SET });
-      setReactions(EMOJI_SET); // Optimistic UI update
+      setReactions(EMOJI_SET);
     } catch (error) {
       console.error("Error resetting reactions:", error);
     }
   };
 
-  /**
-   * Deletes a specific comment from the post.
-   * @param {string} commentId - The ID of the comment to delete.
-   */
   const handleDeleteComment = async (commentId) => {
     const updated = comments.filter(c => c.id !== commentId);
-    setComments(updated); // Optimistic UI update
+    setComments(updated);
     try {
       await updateDoc(postRef, { comments: updated });
     } catch (error) {
       console.error("Error deleting comment:", error);
-      // Revert optimistic update on error
       setComments(comments);
     }
   };
 
-  /**
-   * Renders the embedded content based on its type.
-   * This function is called within the JSX.
-   */
   const renderEmbed = () => {
     if (!embed) return null;
 
     let type, url;
     const parsed = parseEmbedUrl(embed.url);
-    console.log("renderEmbed - Parsed embed:", parsed); // Log parsed embed
+    console.log("renderEmbed - Parsed embed:", parsed);
     if (parsed) {
       type = parsed.type;
       url = parsed.url;
     } else {
-      console.warn("renderEmbed - Failed to parse embed URL:", embed.url); // Warn if parsing fails
-      return null; // skip rendering if it can't be parsed
+      console.warn("renderEmbed - Failed to parse embed URL:", embed.url);
+      return null;
     }
 
     if (!type || !url) return null;
 
     if (type === 'youtube') {
-      // The parseEmbedUrl now returns the direct embed URL for YouTube
       return (
         <div className="mt-4">
           <iframe
             className="w-full aspect-video rounded-lg"
-            src={url} // Use the directly embeddable URL from parseEmbedUrl
+            src={url}
             frameBorder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
@@ -513,12 +447,11 @@ export default function PostCard({
     }
 
     if (type === 'vimeo') {
-      // The parseEmbedUrl now returns the direct embed URL for Vimeo
       return (
         <div className="mt-4">
           <iframe
             className="w-full aspect-video rounded-lg"
-            src={url} // Use the directly embeddable URL from parseEmbedUrl
+            src={url}
             frameBorder="0"
             allow="autoplay; fullscreen; picture-in-picture"
             allowFullScreen
@@ -543,11 +476,7 @@ export default function PostCard({
     }
 
     if (type === 'twitter') {
-      // Twitter embeds are handled by the twttr.widgets.load() script
-      // We need to provide the blockquote element with the full tweet URL in the anchor tag
-      console.log("renderEmbed - Rendering Twitter blockquote with URL:", url); // Log Twitter URL
-
-      // Force twitter.com domain for embed to improve reliability
+      console.log("renderEmbed - Rendering Twitter blockquote with URL:", url);
       const twitterDotComUrl = url.replace('x.com', 'twitter.com');
       console.log("renderEmbed - Using twitter.com URL for embed:", twitterDotComUrl);
 
@@ -561,10 +490,9 @@ export default function PostCard({
               </a>
             </div>
           ) : (
-            <div id={`tweet-embed-${postId}`}> {/* Added unique ID for targeted loading */}
+            <div id={`tweet-embed-${postId}`}>
               <blockquote className="twitter-tweet" data-dnt="true" data-theme="light">
-                {/* The href must be the full, canonical tweet URL for the widget to work */}
-                <a href={twitterDotComUrl}></a> {/* Use the forced twitter.com URL here */}
+                <a href={twitterDotComUrl}></a>
               </blockquote>
             </div>
           )}
@@ -583,7 +511,6 @@ export default function PostCard({
     }
 
     if (type === 'instagram') {
-      // Instagram embeds are handled by the instgrm.Embeds.process() script
       console.log("renderEmbed - Rendering Instagram blockquote with URL:", url);
       return (
         <div className="mt-4">
@@ -595,14 +522,12 @@ export default function PostCard({
               </a>
             </div>
           ) : (
-            // Instagram's embed script expects a blockquote with specific attributes
             <blockquote
               className="instagram-media"
               data-instgrm-permalink={url}
               data-instgrm-version="14"
               style={{ width: '100%', margin: '0 auto' }}
             >
-              {/* The content inside the blockquote is usually just a link to the post */}
               <a href={url} target="_blank" rel="noopener noreferrer"></a>
             </blockquote>
           )}
@@ -626,7 +551,6 @@ export default function PostCard({
       );
     }
 
-    // Fallback to generic clickable link
     return (
       <div className="mt-4">
         <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">
@@ -652,7 +576,6 @@ export default function PostCard({
 
   return (
     <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6 mb-6 border-l-8 border-rose-400 relative font-sans">
-      {/* Custom Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-xl text-center">
@@ -701,12 +624,12 @@ export default function PostCard({
       <p className="text-gray-800 text-lg leading-relaxed whitespace-pre-line mt-2">{text}</p>
 
       {mediaUrl && (
-        <div className="mt-4 rounded-lg overflow-hidden relative">
+        <div className="mt-4 rounded-lg overflow-hidden relative w-full max-h-[500px]">
           {mediaType === 'video' && videoSource ? (
-            <div data-vjs-player className="relative">
+            <div data-vjs-player className="relative h-full w-full">
               <video
                 ref={videoRef}
-                className="video-js rounded-lg max-h-[500px] w-full"
+                className="video-js h-full w-full"
                 playsInline
               >
                 <source src={videoSource} type={videoType} />
@@ -729,17 +652,15 @@ export default function PostCard({
               <img
                 src={mediaUrl}
                 alt="uploaded media"
-                className="w-full rounded-lg object-cover"
+                className="w-full h-full object-cover"
               />
             )
           )}
         </div>
       )}
 
-      {/* Embed block rendering using the renderEmbed function */}
       {renderEmbed()}
 
-      {/* TRADE BLOCK RENDERING */}
       {postType === 'trade' && tradeData && (
         <div className="mt-4 border rounded-lg p-4 bg-yellow-50">
           <h4 className="text-sm font-bold text-yellow-700 uppercase mb-2">Trade Block</h4>
@@ -755,7 +676,6 @@ export default function PostCard({
         </div>
       )}
 
-      {/* POLL RENDERING */}
       {postType === 'poll' && pollData && (
         <div className="mt-4 border rounded-lg p-4 bg-blue-50">
           <h4 className="text-sm font-bold text-blue-700 uppercase mb-2">Poll</h4>
@@ -768,7 +688,6 @@ export default function PostCard({
                   <button
                     onClick={async () => {
                       const updatedOptions = [...pollData.options];
-                      // Ensure votes array exists before pushing
                       updatedOptions[idx].votes = [...(updatedOptions[idx].votes || []), Date.now()];
 
                       try {
@@ -784,10 +703,9 @@ export default function PostCard({
                         }));
                       } catch (error) {
                         console.error("Error voting on poll:", error);
-                        // Revert optimistic update if there's an error
                         setPollData(prev => ({
                           ...prev,
-                          options: pollData.options, // Revert to original options
+                          options: pollData.options,
                         }));
                       }
                     }}
@@ -842,27 +760,31 @@ export default function PostCard({
             onChange={(e) => setNewComment(e.target.value)}
             className="flex-1 border rounded-lg px-3 py-1 text-sm focus:ring-rose-500 focus:border-rose-500"
           />
-          <button type="submit" className="text-rose-500 font-semibold text-sm px-3 py-1 rounded-lg hover:bg-rose-50 transition">
-            Post
+          <button type="submit"
+            className="px-4 py-2 bg-rose-500 text-white rounded-lg text-sm font-semibold hover:bg-rose-600 transition"
+          >
+            Comment
           </button>
         </form>
-
-        <ul className="mt-3 space-y-1 text-sm text-gray-700">
-          {comments.map((c) => (
-            <li key={c.id} className="bg-gray-100 rounded-md p-2 flex justify-between items-center">
-              <span>{c.text}</span>
-              {access === 'admin' && (
+        {comments.length > 0 && (
+          <div className="mt-4 space-y-3">
+            <h5 className="text-sm font-bold uppercase text-gray-500">Comments</h5>
+            {comments.map(comment => (
+              <div key={comment.id} className="bg-gray-50 p-3 rounded-lg flex items-start justify-between">
+                <p className="text-gray-700 text-sm">{comment.text}</p>
                 <button
-                  onClick={() => handleDeleteComment(c.id)}
-                  className="ml-2 text-red-500 text-xs hover:underline"
+                  onClick={() => handleDeleteComment(comment.id)}
+                  className="text-gray-400 hover:text-red-500 transition ml-2 text-xs"
                   aria-label="Delete comment"
                 >
-                  ✖
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
-              )}
-            </li>
-          ))}
-        </ul>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
