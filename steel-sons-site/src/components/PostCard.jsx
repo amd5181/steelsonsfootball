@@ -19,7 +19,7 @@ import { parseEmbedUrl } from '../utils/embedParser';
 let currentPlayingPlayerInfo = null;
 
 // Initial emoji set for reactions
-const EMOJI_SET = { '❤️': 0, '😂': 0, '�': 0, '👎': 0 };
+const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 };
 
 /**
  * Formats a timestamp into a localized date and time string.
@@ -877,4 +877,3 @@ export default function PostCard({
 // Helper function to handle base64 encoding/decoding and other utilities
 // This is not part of the main component but is often needed for full app functionality.
 // This is left as is for now.
-�
