@@ -621,7 +621,7 @@ export default function PostCard({
     if (type === 'video') {
       return (
         <div className="mt-4">
-          <video src={url} controls className="w-full rounded-lg max-h-[500px]" playsInline />
+          <video src={url} controls className="w-full rounded-lg max-h-[400px]" playsInline />
         </div>
       );
     }
@@ -703,7 +703,7 @@ export default function PostCard({
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            <div data-vjs-player className="relative max-h-[500px]">
+            <div data-vjs-player className="relative max-h-[400px]">
               <video
                 ref={videoRef}
                 className="video-js rounded-lg w-full"
