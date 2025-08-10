@@ -11,7 +11,7 @@ import { db } from '../lib/firebase';
 import { parseEmbedUrl } from '../utils/embedParser';
 
 // Initial emoji set for reactions
-const EMOJI_SET = { '❤️': 0, '�': 0, '🔥': 0, '👎': 0 };
+const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 };
 
 /**
  * Formats a timestamp into a localized date and time string.
@@ -530,9 +530,7 @@ export default function PostCard({
                   src={posterUrl || ''}
                   alt="video poster"
                   className="absolute inset-0 w-full h-full object-cover z-10"
-                  // Note: Aspect ratio is now managed by the hook, so we don't need to set it here
-                  // The hook will update the `aspect` state which drives the style prop above.
-                  onError={() => {}} // Handle poster errors gracefully
+                  onError={() => {}}
                 />
               )}
               <div className="absolute inset-0">
@@ -564,10 +562,8 @@ export default function PostCard({
         </div>
       )}
 
-      {/* Embed block rendering using the renderEmbed function */}
       {renderEmbed()}
 
-      {/* TRADE BLOCK RENDERING */}
       {postType === 'trade' && tradeData && (
         <div className="mt-4 border rounded-lg p-4 bg-yellow-50">
           <h4 className="text-sm font-bold text-yellow-700 uppercase mb-2">Trade Block</h4>
@@ -583,7 +579,6 @@ export default function PostCard({
         </div>
       )}
 
-      {/* POLL RENDERING */}
       {postType === 'poll' && pollData && (
         <div className="mt-4 border rounded-lg p-4 bg-blue-50">
           <h4 className="text-sm font-bold text-blue-700 uppercase mb-2">Poll</h4>
@@ -693,4 +688,3 @@ export default function PostCard({
     </div>
   );
 }
-�
