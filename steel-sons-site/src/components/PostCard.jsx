@@ -17,7 +17,7 @@ import { parseEmbedUrl } from '../utils/embedParser';
 let currentPlayingPlayerInfo = null;
 
 // Initial emoji set for reactions
-const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 };
+const EMOJI_SET = { '❤️': 0, '\u{1F602}': 0, '🔥': 0, '👎': 0 };
 
 /**
  * Formats a timestamp into a localized date and time string.
@@ -185,7 +185,7 @@ export default function PostCard({
           autoplay: false,
           preload: 'auto',
           responsive: true,
-          fluid: true,
+          fluid: false, // Changed from true to false
           loop: true,
           muted: true,
           poster: posterUrl,
@@ -629,7 +629,7 @@ export default function PostCard({
             <div data-vjs-player className="relative w-full h-full">
               <video
                 ref={videoRef}
-                className="video-js vjs-fluid w-full"
+                className="video-js w-full h-full object-contain"
                 playsInline
               >
                 <source src={videoSource} type={videoType} />
