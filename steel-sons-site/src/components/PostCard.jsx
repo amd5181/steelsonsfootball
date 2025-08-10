@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
@@ -21,6 +20,9 @@ let currentPlayingPlayerInfo = null;
 
 // Initial emoji set for reactions
 const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 };
+
+// Time in milliseconds for the guest delete window (15 minutes)
+const GUEST_DELETE_WINDOW = 15 * 60 * 1000;
 
 /**
  * Formats a timestamp into a localized date and time string.
@@ -76,11 +78,29 @@ export default function PostCard({
   const [isLoading, setIsLoading] = useState(true); // Loading state for post data
   const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false); // State to track Twitter embed failure
   const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false); // State to track Instagram embed failure
+  const [showAdminDropdown, setShowAdminDropdown] = useState(false);
+  const adminDropdownRef = useRef(null);
+
 
   // NEW: State to track touch start position for distinguishing taps from scrolls
   const touchStartPos = useRef({ x: 0, y: 0 });
 
   const postRef = doc(db, 'posts', postId);
+
+  // Effect to close dropdown on outside clicks
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (adminDropdownRef.current && !adminDropdownRef.current.contains(event.target)) {
+        setShowAdminDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [adminDropdownRef]);
+
 
   // Effect to fetch initial post data and set up real-time listener
   useEffect(() => {
@@ -336,34 +356,49 @@ export default function PostCard({
 
   // NEW: Effect to handle Instagram widget loading and rendering
   useEffect(() => {
-    if (embed?.type !== 'instagram') return;
-  
-    // NOTE: load https://www.instagram.com/embed.js once globally in index.html.
-    // Here we only (re)process and detect failure.
-    const tryProcess = () => {
-      try {
-        window.instgrm?.Embeds?.process?.();
-      } catch (e) {
-        // swallow; we'll flip the fallback below if it never renders
+    if (embed?.type === 'instagram') {
+      const loadInstagramWidgets = () => {
+        // Instagram's script uses window.instgrm.Embeds.process()
+        if (window.instgrm && window.instgrm.Embeds) {
+          // A small delay to ensure the blockquote is in the DOM before processing
+          setTimeout(() => {
+            try {
+              window.instgrm.Embeds.process();
+              console.log("Instagram widget processed successfully for postId:", postId);
+              setInstagramEmbedFailed(false);
+            } catch (err) {
+              console.error("Error processing Instagram widget for postId:", postId, err);
+              setInstagramEmbedFailed(true);
+            }
+          }, 100);
+        } else {
+          console.warn("Instagram Embed - window.instgrm or window.instgrm.Embeds not available.");
+          setInstagramEmbedFailed(true);
+        }
+      };
+
+      // Check if instgrm object exists, if not, load the script
+      if (typeof window.instgrm === 'undefined') {
+        console.log("Instagram Embed - Loading embed.js script...");
+        const script = document.createElement('script');
+        script.setAttribute('src', 'https://www.instagram.com/embed.js');
+        script.setAttribute('async', '');
+        script.setAttribute('charset', 'utf-8');
+        document.body.appendChild(script);
+        script.onload = () => {
+          console.log("Instagram Embed - embed.js script loaded.");
+          loadInstagramWidgets(); // Process widgets once script is loaded
+        };
+        script.onerror = (e) => {
+          console.error("Instagram Embed - Failed to load embed.js script:", e);
+          setInstagramEmbedFailed(true);
+        };
+      } else {
+        console.log("Instagram Embed - embed.js script already loaded, attempting to process widgets.");
+        loadInstagramWidgets();
       }
-    };
-  
-    // process right after render
-    const t1 = setTimeout(tryProcess, 0);
-  
-    // after a beat, verify IG actually injected an iframe with size; otherwise show fallback
-    const t2 = setTimeout(() => {
-      const container = document.getElementById(`ig-wrap-${postId}`);
-      const iframe = container?.querySelector('iframe');
-      const ok = !!iframe && iframe.clientHeight > 40;
-      setInstagramEmbedFailed(!ok);
-    }, 1200);
-  
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [embed, postId]);
+    }
+  }, [embed, postId]); // Depend on embed and postId to re-run when they change
 
 
   /**
@@ -444,6 +479,7 @@ export default function PostCard({
     } catch (error) {
       console.error("Error resetting reactions:", error);
     }
+    setShowAdminDropdown(false); // Close the dropdown after action
   };
 
   /**
@@ -461,6 +497,10 @@ export default function PostCard({
       setComments(comments);
     }
   };
+
+  // Determine if the post can be deleted by a non-admin.
+  const isWithinTimeWindow = (Date.now() - createdAt) <= GUEST_DELETE_WINDOW;
+  const canDelete = access === 'admin' || isWithinTimeWindow;
 
   /**
    * Renders the embedded content based on its type.
@@ -569,31 +609,32 @@ export default function PostCard({
     }
 
     if (type === 'instagram') {
+      // Instagram embeds are handled by the instgrm.Embeds.process() script
       console.log("renderEmbed - Rendering Instagram blockquote with URL:", url);
-      const permalink = url.endsWith('/') ? url : `${url}/`;
       return (
-        <div className="mt-4" id={`ig-wrap-${postId}`}>
+        <div className="mt-4">
           {instagramEmbedFailed ? (
             <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
               <p className="font-semibold mb-2">Could not load Instagram post.</p>
-              <a href={permalink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                View on Instagram
+              <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                Click here to view the post on Instagram
               </a>
             </div>
           ) : (
+            // Instagram's embed script expects a blockquote with specific attributes
             <blockquote
               className="instagram-media"
-              data-instgrm-permalink={permalink}
+              data-instgrm-permalink={url}
               data-instgrm-version="14"
               style={{ width: '100%', margin: '0 auto' }}
             >
-              <a href={permalink} target="_blank" rel="noopener noreferrer"></a>
+              {/* The content inside the blockquote is usually just a link to the post */}
+              <a href={url} target="_blank" rel="noopener noreferrer"></a>
             </blockquote>
           )}
         </div>
       );
     }
-
 
     if (type === 'image') {
       return (
@@ -660,27 +701,64 @@ export default function PostCard({
         </div>
       )}
 
-      {access === 'admin' && (
-        <div className="absolute top-3 right-3">
-          <details className="relative">
-            <summary className="cursor-pointer text-xl text-gray-400 hover:text-rose-500">⋮</summary>
-            <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 shadow-md rounded-md p-2 text-sm z-50 space-y-2">
-              <button onClick={handleDeletePost} className="w-full text-left text-red-600 hover:underline">Delete Post</button>
-              <button onClick={handleResetReactions} className="w-full text-left hover:underline">Reset Reactions</button>
-            </div>
-          </details>
-        </div>
-      )}
-
-      <div className="flex justify-between items-start">
+      <div className="flex justify-between items-start mb-2">
         <div className="text-sm uppercase font-bold tracking-wide text-rose-500">
           {name}
         </div>
-        {createdAt && (
-          <div className="text-xs text-gray-400 whitespace-nowrap ml-2">
-            {formatDate(createdAt)}
-          </div>
-        )}
+
+        <div className="flex items-center gap-2">
+          {createdAt && (
+            <div className="text-xs text-gray-400 whitespace-nowrap">
+              {formatDate(createdAt)}
+            </div>
+          )}
+
+          {/* Delete button, visible for a 15-minute window or for admins */}
+          {canDelete && (
+            <button
+              onClick={handleDeletePost}
+              className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+              title="Delete post"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18"></path>
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                <line x1="10" x2="10" y1="11" y2="17"></line>
+                <line x1="14" x2="14" y1="11" y2="17"></line>
+              </svg>
+            </button>
+          )}
+
+          {/* Admin-only dropdown */}
+          {access === 'admin' && (
+            <div className="relative" ref={adminDropdownRef}>
+              <button
+                onClick={() => setShowAdminDropdown(!showAdminDropdown)}
+                className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Admin actions"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="1"></circle>
+                  <circle cx="19" cy="12" r="1"></circle>
+                  <circle cx="5" cy="12" r="1"></circle>
+                </svg>
+              </button>
+              {showAdminDropdown && (
+                <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+                  <div className="py-1">
+                    <button
+                      onClick={handleResetReactions}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      Clear Reactions
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <p className="text-gray-800 text-lg leading-relaxed whitespace-pre-line mt-2">{text}</p>
