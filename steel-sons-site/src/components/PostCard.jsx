@@ -541,10 +541,10 @@ export default function PostCard({
                   onError={() => setShowPoster(false)}
                 />
               )}
-              <div data-vjs-player className="absolute inset-0">
+              <div className="absolute inset-0">
                 <video
                   ref={videoRef}
-                  className="video-js rounded-lg w-full h-full object-cover"
+                  className="rounded-lg w-full h-full object-cover"
                   playsInline
                 />
               </div>
