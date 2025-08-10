@@ -7,15 +7,12 @@ import {
   updateDoc,
   deleteDoc,
   increment,
-  onSnapshot, // Import onSnapshot for real-time updates
+  onSnapshot,
 } from 'firebase/firestore';
-import { db } from '../lib/firebase'; // Assuming db is initialized elsewhere
+import { db } from '../lib/firebase';
 import { parseEmbedUrl } from '../utils/embedParser';
-// The 'lucide-react' import has been removed to fix the build error.
-// import { Trash2 } from 'lucide-react'; 
 
 // Global variable to track the currently playing video.
-// For a more robust solution in a larger app, consider using React Context API.
 let currentPlayingPlayerInfo = null;
 
 // Initial emoji set for reactions
@@ -36,19 +33,15 @@ function formatDate(timestamp) {
 
 /**
  * Helper function to get or create a unique client ID for the device.
- * This ID is used to determine if the user is the original poster.
- * We now use the native crypto.randomUUID() instead of the uuid package.
  * @returns {string} The unique client ID.
  */
 const getClientId = () => {
   let clientId = localStorage.getItem('clientId');
   if (!clientId) {
-    // Using native crypto API for UUID generation, eliminating the need for the 'uuid' package.
     clientId = crypto.randomUUID();
     localStorage.setItem('clientId', clientId);
   }
   return clientId;
-
 };
 
 /**
@@ -56,13 +49,13 @@ const getClientId = () => {
  * with media, reactions, comments, and embeds.
  * @param {object} props - Component props.
  * @param {string} props.name - The name of the post creator.
-
  * @param {string} props.text - The main text content of the post.
  * @param {number} props.createdAt - The creation timestamp of the post.
  * @param {string} props.mediaUrl - URL of the attached media (image/video).
  * @param {string} props.mediaType - Type of the attached media ('image' or 'video').
  * @param {string} props.postId - The ID of the post in Firestore.
  * @param {string} props.access - User's access level ('admin' or 'user').
+
  * @param {function} props.onUpdate - Callback function for post updates (e.g., after deletion).
  */
 export default function PostCard({
@@ -89,29 +82,39 @@ export default function PostCard({
   const [reactions, setReactions] = useState(EMOJI_SET);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); // State for custom delete confirmation
-  const [isLoading, setIsLoading] = useState(true); // Loading state for post data
-  const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false); // State to track Twitter embed failure
-  const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false); // State to track Instagram embed failure
-  // State to track the client ID of the user who posted this message
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false);
+  const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false);
   const [posterClientId, setPosterClientId] = useState(null);
+  const [showAdminDropdown, setShowAdminDropdown] = useState(false); // New state for admin dropdown
+  const adminDropdownRef = useRef(null); // Ref for admin dropdown to handle outside clicks
 
-  // Get the current user's client ID from local storage
   const currentClientId = getClientId();
-
-  // State to track touch start position for distinguishing taps from scrolls
-  const touchStartPos = useRef({ x: 0, y: 0 });
 
   const postRef = doc(db, 'posts', postId);
 
-  // Effect to fetch initial post data and set up real-time listener
+  // Effect to close dropdown on outside clicks
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (adminDropdownRef.current && !adminDropdownRef.current.contains(event.target)) {
+        setShowAdminDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [adminDropdownRef]);
+
   useEffect(() => {
     setIsLoading(true);
     const unsubscribe = onSnapshot(postRef, (snap) => {
       if (snap.exists()) {
         const data = snap.data();
         setPostType(data.type || 'general');
-        setPosterClientId(data.clientId || null); // Get the poster's client ID from Firestore
+        setPosterClientId(data.clientId || null);
 
         if (data.type === 'trade') {
           setTradeData({
@@ -120,16 +123,15 @@ export default function PostCard({
             notes: data.notes || '',
           });
         } else {
-          setTradeData(null); // Clear trade data if post type changes
+          setTradeData(null);
         }
 
         if (data.type === 'poll') {
           setPollData(data.poll);
-          // Check localStorage for vote status. Note: localStorage is client-side only.
           const voted = localStorage.getItem(`voted-${postId}`);
           setHasVoted(!!voted);
         } else {
-          setPollData(null); // Clear poll data if post type changes
+          setPollData(null);
         }
 
         const fromFirestore = data.reactions || {};
@@ -137,13 +139,9 @@ export default function PostCard({
         setReactions(mergedReactions);
         setComments(data.comments || []);
         setEmbed(data.embed || null);
-        console.log("PostCard - Fetched embed data:", data.embed); // Log embed data
-        setTwitterEmbedFailed(false); // Reset failure state on new data
-        setInstagramEmbedFailed(false); // Reset failure state for Instagram
+        setTwitterEmbedFailed(false);
+        setInstagramEmbedFailed(false);
       } else {
-        // Handle case where post might have been deleted
-        console.log("Post does not exist or has been deleted.");
-        // Optionally, trigger onUpdate to remove the card from the UI
         onUpdate?.();
       }
       setIsLoading(false);
@@ -152,10 +150,9 @@ export default function PostCard({
       setIsLoading(false);
     });
 
-    return () => unsubscribe(); // Cleanup listener on unmount
-  }, [postId, onUpdate]); // onUpdate added as dependency for cleanup if it changes
+    return () => unsubscribe();
+  }, [postId, onUpdate]);
 
-  // Effect to handle video source and type detection
   useEffect(() => {
     if (mediaType === 'video' && mediaUrl) {
       const basePath = mediaUrl.split('/upload/')[1]?.replace(/\.(mp4|mov)$/i, '');
@@ -164,14 +161,12 @@ export default function PostCard({
 
       setPosterUrl(poster);
 
-      // Check for HLS availability first
       fetch(hlsUrl, { method: 'HEAD' })
         .then(res => {
           if (res.ok) {
             setVideoSource(hlsUrl);
             setVideoType('application/x-mpegURL');
           } else {
-            // Fallback to original MP4 if HLS is not available
             setVideoSource(mediaUrl);
             setVideoType('video/mp4');
           }
@@ -184,133 +179,91 @@ export default function PostCard({
     }
   }, [mediaUrl, mediaType]);
 
-  // Callback to toggle video play/pause
   const togglePlay = useCallback(() => {
     const player = playerRef.current;
     if (!player) return;
 
-    // Pause any other currently playing video
     if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player !== player) {
       currentPlayingPlayerInfo.player.pause();
       currentPlayingPlayerInfo.setShowOverlay(true);
-      currentPlayingPlayerInfo.player.muted(true); // Mute when pausing others
+      currentPlayingPlayerInfo.player.muted(true);
     }
 
     if (player.paused()) {
       player.play().then(() => {
-        player.muted(false); // Unmute when playing
-        player.poster(''); // Hide poster after play starts
+        player.muted(false);
+        player.poster('');
         setShowPlayOverlay(false);
         currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
       }).catch(err => {
         console.error('Video play error:', err);
-        setShowPlayOverlay(true); // Show overlay if play fails
+        setShowPlayOverlay(true);
       });
     } else {
       player.pause();
       setShowPlayOverlay(true);
-      player.muted(true); // Mute when paused
+      player.muted(true);
       currentPlayingPlayerInfo = null;
     }
   }, []);
 
-  // Effect to initialize and manage video.js player
   useEffect(() => {
     if (mediaType === 'video' && videoRef.current && videoSource) {
       if (!playerRef.current) {
-        // Initialize video.js player
         playerRef.current = videojs(videoRef.current, {
-          controls: false, // Custom controls via overlay
+          controls: false,
           autoplay: false,
           preload: 'auto',
           responsive: true,
           fill: true,
           loop: true,
-          muted: true, // Start muted to allow autoplay without user interaction
+          muted: true,
           poster: posterUrl,
         });
 
         const player = playerRef.current;
         const videoElement = player.el().querySelector('video');
 
-        // Event handlers for more deliberate touch detection on mobile
-        const handleTouchStart = (e) => {
-            // Store the initial touch position
-            touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        const handleInteraction = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          togglePlay();
         };
 
-        const handleTouchEnd = (e) => {
-            // Get the final touch position
-            const endX = e.changedTouches[0].clientX;
-            const endY = e.changedTouches[0].clientY;
-            // Calculate the distance moved
-            const dx = Math.abs(endX - touchStartPos.current.x);
-            const dy = Math.abs(endY - touchStartPos.current.y);
-
-            // Define a small threshold to distinguish a tap from a scroll
-            const touchThreshold = 10; // in pixels
-
-            if (dx < touchThreshold && dy < touchThreshold) {
-                // If the movement was minimal, treat it as a deliberate tap
-                e.preventDefault();
-                e.stopPropagation();
-                togglePlay();
-            }
-        };
-
-        // Add event listeners to the video element
         if (videoElement) {
-          // Add touch event listeners to the video element itself
-          videoElement.addEventListener('touchstart', handleTouchStart);
-          videoElement.addEventListener('touchend', handleTouchEnd);
-          // Keep the click listener for desktop users
-          videoElement.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            togglePlay();
-          });
+          videoElement.addEventListener('click', handleInteraction);
+          videoElement.addEventListener('touchend', handleInteraction);
         }
 
-        // Update overlay state based on player events
         player.on('play', () => setShowPlayOverlay(false));
         player.on('pause', () => setShowPlayOverlay(true));
-        setShowPlayOverlay(true); // Ensure overlay is shown initially
+        setShowPlayOverlay(true);
       } else {
-        // Update video source if it changes
         if (playerRef.current.currentSrc() !== videoSource) {
           playerRef.current.src({ src: videoSource, type: videoType });
           playerRef.current.poster(posterUrl);
-          setShowPlayOverlay(true); // Show overlay when source changes
+          setShowPlayOverlay(true);
         }
       }
     }
 
-    // Cleanup function for video.js player and event listeners
     return () => {
       if (playerRef.current) {
         const player = playerRef.current;
         const videoElement = player.el().querySelector('video');
         if (videoElement) {
-            // Remove event listeners
-            videoElement.removeEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                togglePlay();
-            });
-            videoElement.removeEventListener('touchstart', () => {});
-            videoElement.removeEventListener('touchend', () => {});
+          videoElement.removeEventListener('click', () => {});
+          videoElement.removeEventListener('touchend', () => {});
         }
-        playerRef.current.dispose(); // Dispose of the video.js player
+        playerRef.current.dispose();
         playerRef.current = null;
       }
-      // Clear global reference if this player was the one currently playing
       if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === playerRef.current) {
         currentPlayingPlayerInfo = null;
       }
     };
   }, [videoSource, videoType, mediaType, posterUrl, togglePlay]);
 
-  // Effect to handle Twitter widget loading and rendering
   useEffect(() => {
     if (embed?.type === 'twitter') {
       const loadTwitterWidgets = () => {
@@ -320,7 +273,6 @@ export default function PostCard({
             if (targetElement) {
               window.twttr.widgets.load(targetElement)
                 .then((el) => {
-                  console.log("Twitter widget loaded successfully for postId:", postId, el);
                   setTwitterEmbedFailed(false);
                 })
                 .catch((err) => {
@@ -328,12 +280,10 @@ export default function PostCard({
                   setTwitterEmbedFailed(true);
                 });
             } else {
-              console.warn("Twitter Embed - Target element not found for postId:", postId);
               setTwitterEmbedFailed(true);
             }
           }, 100);
         } else {
-          console.warn("Twitter Embed - window.twttr or window.twttr.widgets not available.");
           setTwitterEmbedFailed(true);
         }
       };
@@ -348,7 +298,6 @@ export default function PostCard({
           loadTwitterWidgets();
         };
         script.onerror = (e) => {
-          console.error("Twitter Embed - Failed to load widgets.js script:", e);
           setTwitterEmbedFailed(true);
         };
       } else {
@@ -357,17 +306,13 @@ export default function PostCard({
     }
   }, [embed, postId]);
 
-  // Effect to handle Instagram widget loading and rendering
   useEffect(() => {
     if (embed?.type === 'instagram') {
       const loadInstagramWidgets = () => {
-        // Instagram's script uses window.instgrm.Embeds.process()
         if (window.instgrm && window.instgrm.Embeds) {
-          // A small delay to ensure the blockquote is in the DOM before processing
           setTimeout(() => {
             try {
               window.instgrm.Embeds.process();
-              console.log("Instagram widget processed successfully for postId:", postId);
               setInstagramEmbedFailed(false);
             } catch (err) {
               console.error("Error processing Instagram widget for postId:", postId, err);
@@ -375,68 +320,52 @@ export default function PostCard({
             }
           }, 100);
         } else {
-          console.warn("Instagram Embed - window.instgrm or window.instgrm.Embeds not available.");
           setInstagramEmbedFailed(true);
         }
       };
 
-      // Check if instgrm object exists, if not, load the script
       if (typeof window.instgrm === 'undefined') {
-        console.log("Instagram Embed - Loading embed.js script...");
         const script = document.createElement('script');
         script.setAttribute('src', 'https://www.instagram.com/embed.js');
         script.setAttribute('async', '');
         script.setAttribute('charset', 'utf-8');
         document.body.appendChild(script);
         script.onload = () => {
-          console.log("Instagram Embed - embed.js script loaded.");
-          loadInstagramWidgets(); // Process widgets once script is loaded
+          loadInstagramWidgets();
         };
         script.onerror = (e) => {
-          console.error("Instagram Embed - Failed to load embed.js script:", e);
           setInstagramEmbedFailed(true);
         };
       } else {
         loadInstagramWidgets();
       }
     }
-  }, [embed, postId]); // Depend on embed and postId to re-run when they change
+  }, [embed, postId]);
 
-
-  /**
-   * Handles user reaction to the post.
-   * @param {string} emoji - The emoji character reacted with.
-   */
   const handleReaction = async (emoji) => {
     try {
-      // Optimistic UI update
       setReactions(prev => ({ ...prev, [emoji]: (prev[emoji] || 0) + 1 }));
       await updateDoc(postRef, {
         [`reactions.${emoji}`]: increment(1),
       });
     } catch (error) {
       console.error("Error updating reaction:", error);
-      // Revert optimistic update on error
       setReactions(prev => ({ ...prev, [emoji]: (prev[emoji] || 0) - 1 }));
     }
   };
 
-  /**
-   * Handles submission of a new comment.
-   * @param {Event} e - The form submission event.
-   */
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
     if (!newComment.trim()) return;
 
     const comment = {
       text: newComment.trim(),
-      createdAt: Date.now(), // Using Date.now() for simplicity, Firestore Timestamp is also an option
+      createdAt: Date.now(),
       id: crypto.randomUUID(),
     };
 
     const updated = [...comments, comment];
-    setComments(updated); // Optimistic UI update
+    setComments(updated);
     setNewComment('');
 
     try {
@@ -445,87 +374,65 @@ export default function PostCard({
       });
     } catch (error) {
       console.error("Error adding comment:", error);
-      // Revert optimistic update on error
       setComments(comments);
     }
   };
 
-  /**
-   * Initiates the post deletion process, showing a confirmation modal.
-   */
   const handleDeletePost = () => {
     setShowDeleteConfirm(true);
   };
 
-  /**
-   * Confirms and performs post deletion.
-   */
   const confirmDeletePost = async () => {
     try {
       await deleteDoc(postRef);
-      onUpdate?.(); // Notify parent component of deletion
+      onUpdate?.();
     } catch (error) {
       console.error("Error deleting post:", error);
     } finally {
-      setShowDeleteConfirm(false); // Hide confirmation modal
+      setShowDeleteConfirm(false);
     }
   };
 
-  /**
-   * Resets all reactions on the post.
-   */
   const handleResetReactions = async () => {
     try {
       await updateDoc(postRef, { reactions: EMOJI_SET });
-      setReactions(EMOJI_SET); // Optimistic UI update
+      setReactions(EMOJI_SET);
     } catch (error) {
       console.error("Error resetting reactions:", error);
     }
   };
 
-  /**
-   * Deletes a specific comment from the post.
-   * @param {string} commentId - The ID of the comment to delete.
-   */
   const handleDeleteComment = async (commentId) => {
     const updated = comments.filter(c => c.id !== commentId);
-    setComments(updated); // Optimistic UI update
+    setComments(updated);
     try {
       await updateDoc(postRef, { comments: updated });
     } catch (error) {
       console.error("Error deleting comment:", error);
-      // Revert optimistic update on error
       setComments(comments);
     }
   };
 
-  /**
-   * Renders the embedded content based on its type.
-   * This function is called within the JSX.
-   */
   const renderEmbed = () => {
     if (!embed) return null;
 
     let type, url;
     const parsed = parseEmbedUrl(embed.url);
-    console.log("renderEmbed - Parsed embed:", parsed); // Log parsed embed
     if (parsed) {
       type = parsed.type;
       url = parsed.url;
     } else {
-      console.warn("renderEmbed - Failed to parse embed URL:", embed.url); // Warn if parsing fails
-      return null; // skip rendering if it can't be parsed
+      return null;
     }
 
     if (!type || !url) return null;
 
     if (type === 'youtube') {
-      // The parseEmbedUrl now returns the direct embed URL for YouTube
       return (
         <div className="mt-4">
           <iframe
             className="w-full aspect-video rounded-lg"
-            src={url} // Use the directly embeddable URL from parseEmbedUrl
+            src={url}
             frameBorder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
@@ -536,12 +443,11 @@ export default function PostCard({
     }
 
     if (type === 'vimeo') {
-      // The parseEmbedUrl now returns the direct embed URL for Vimeo
       return (
         <div className="mt-4">
           <iframe
             className="w-full aspect-video rounded-lg"
-            src={url} // Use the directly embeddable URL from parseEmbedUrl
+            src={url}
             frameBorder="0"
             allow="autoplay; fullscreen; picture-in-picture"
             allowFullScreen
@@ -566,14 +472,7 @@ export default function PostCard({
     }
 
     if (type === 'twitter') {
-      // Twitter embeds are handled by the twttr.widgets.load() script
-      // We need to provide the blockquote element with the full tweet URL in the anchor tag
-      console.log("renderEmbed - Rendering Twitter blockquote with URL:", url); // Log Twitter URL
-
-      // Force twitter.com domain for embed to improve reliability
       const twitterDotComUrl = url.replace('x.com', 'twitter.com');
-      console.log("renderEmbed - Using twitter.com URL for embed:", twitterDotComUrl);
-
       return (
         <div className="mt-4">
           {twitterEmbedFailed ? (
@@ -584,10 +483,9 @@ export default function PostCard({
               </a>
             </div>
           ) : (
-            <div id={`tweet-embed-${postId}`}> {/* Added unique ID for targeted loading */}
+            <div id={`tweet-embed-${postId}`}>
               <blockquote className="twitter-tweet" data-dnt="true" data-theme="light">
-                {/* The href must be the full, canonical tweet URL for the widget to work */}
-                <a href={twitterDotComUrl}></a> {/* Use the forced twitter.com URL here */}
+                <a href={twitterDotComUrl}></a>
               </blockquote>
             </div>
           )}
@@ -606,8 +504,6 @@ export default function PostCard({
     }
 
     if (type === 'instagram') {
-      // Instagram embeds are handled by the instgrm.Embeds.process() script
-      console.log("renderEmbed - Rendering Instagram blockquote with URL:", url);
       return (
         <div className="mt-4">
           {instagramEmbedFailed ? (
@@ -618,14 +514,12 @@ export default function PostCard({
               </a>
             </div>
           ) : (
-            // Instagram's embed script expects a blockquote with specific attributes
             <blockquote
               className="instagram-media"
               data-instgrm-permalink={url}
               data-instgrm-version="14"
               style={{ width: '100%', margin: '0 auto' }}
             >
-              {/* The content inside the blockquote is usually just a link to the post */}
               <a href={url} target="_blank" rel="noopener noreferrer"></a>
             </blockquote>
           )}
@@ -649,7 +543,6 @@ export default function PostCard({
       );
     }
 
-    // Fallback to generic clickable link
     return (
       <div className="mt-4">
         <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">
@@ -675,7 +568,6 @@ export default function PostCard({
 
   return (
     <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6 mb-6 border-l-8 border-rose-400 relative font-sans">
-      {/* Custom Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-xl text-center">
@@ -698,34 +590,63 @@ export default function PostCard({
         </div>
       )}
 
-      {/* Conditional rendering for the delete button */}
-      {(access === 'admin' || posterClientId === currentClientId) && (
-        <div className="absolute top-3 right-3 z-10">
-          <button
-            onClick={handleDeletePost}
-            className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-            title="Delete post"
-          >
-             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <div className="flex justify-between items-start mb-2">
+        <div className="text-sm uppercase font-bold tracking-wide text-rose-500">
+          {name}
+        </div>
+
+        {/* Conditional rendering for delete options with proper spacing */}
+        <div className="flex items-center gap-2">
+          {createdAt && (
+            <div className="text-xs text-gray-400 whitespace-nowrap">
+              {formatDate(createdAt)}
+            </div>
+          )}
+
+          {access === 'admin' ? (
+            // Admin dropdown menu
+            <div className="relative" ref={adminDropdownRef}>
+              <button
+                onClick={() => setShowAdminDropdown(!showAdminDropdown)}
+                className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                aria-label="Admin options"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="1"></circle>
+                  <circle cx="19" cy="12" r="1"></circle>
+                  <circle cx="5" cy="12" r="1"></circle>
+                </svg>
+              </button>
+              {showAdminDropdown && (
+                <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+                  <div className="py-1">
+                    <button
+                      onClick={handleDeletePost}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-red-500"
+                    >
+                      Delete Post
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : posterClientId === currentClientId && (
+            // Regular user delete icon
+            <button
+              onClick={handleDeletePost}
+              className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+              title="Delete post"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 6h18"></path>
                 <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
                 <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
                 <line x1="10" x2="10" y1="11" y2="17"></line>
                 <line x1="14" x2="14" y1="11" y2="17"></line>
-            </svg>
-          </button>
+              </svg>
+            </button>
+          )}
         </div>
-      )}
-
-      <div className="flex justify-between items-start">
-        <div className="text-sm uppercase font-bold tracking-wide text-rose-500">
-          {name}
-        </div>
-        {createdAt && (
-          <div className="text-xs text-gray-400 whitespace-nowrap ml-2">
-            {formatDate(createdAt)}
-          </div>
-        )}
       </div>
 
       <p className="text-gray-800 text-lg leading-relaxed whitespace-pre-line mt-2">{text}</p>
@@ -737,12 +658,10 @@ export default function PostCard({
               className={`relative w-full transition-[max-height] duration-300 ease-out
                 ${showPlayOverlay ? 'max-h-[85svh]' : 'max-h-[85svh]'} md:max-h-[700px]`}
             >
-              {/* Let video.js handle fluid sizing; we just cap the container height */}
               <div
                 className={`relative w-full transition-[height] duration-300 ease-out
                   ${showPlayOverlay ? 'h-[52svh]' : 'h-[88svh]'} md:h-[700px]`}
               >
-                {/* Player fills this box */}
                 <div data-vjs-player className="absolute inset-0">
                   <video
                     ref={videoRef}
@@ -753,7 +672,7 @@ export default function PostCard({
                     <source src={videoSource} type={videoType} />
                   </video>
                 </div>
-              
+
                 {showPlayOverlay && (
                   <button
                     type="button"
@@ -784,10 +703,8 @@ export default function PostCard({
         </div>
       )}
 
-      {/* Embed block rendering using the renderEmbed function */}
       {renderEmbed()}
 
-      {/* TRADE BLOCK RENDERING */}
       {postType === 'trade' && tradeData && (
         <div className="mt-4 border rounded-lg p-4 bg-yellow-50">
           <h4 className="text-sm font-bold text-yellow-700 uppercase mb-2">Trade Block</h4>
@@ -803,7 +720,6 @@ export default function PostCard({
         </div>
       )}
 
-      {/* POLL RENDERING */}
       {postType === 'poll' && pollData && (
         <div className="mt-4 border rounded-lg p-4 bg-blue-50">
           <h4 className="text-sm font-bold text-blue-700 uppercase mb-2">Poll</h4>
@@ -816,7 +732,6 @@ export default function PostCard({
                   <button
                     onClick={async () => {
                       const updatedOptions = [...pollData.options];
-                      // Ensure votes array exists before pushing
                       updatedOptions[idx].votes = [...(updatedOptions[idx].votes || []), Date.now()];
 
                       try {
@@ -832,10 +747,9 @@ export default function PostCard({
                         }));
                       } catch (error) {
                         console.error("Error voting on poll:", error);
-                        // Revert optimistic update if there's an error
                         setPollData(prev => ({
                           ...prev,
-                          options: pollData.options, // Revert to original options
+                          options: pollData.options,
                         }));
                       }
                     }}
@@ -899,7 +813,6 @@ export default function PostCard({
           {comments.map((c) => (
             <li key={c.id} className="bg-gray-100 rounded-md p-2 flex justify-between items-center">
               <span>{c.text}</span>
-              {/* Conditional comment deletion - only visible to admins */}
               {access === 'admin' && (
                 <button
                   onClick={() => handleDeleteComment(c.id)}
