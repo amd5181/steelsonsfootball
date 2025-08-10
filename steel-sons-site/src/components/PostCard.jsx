@@ -17,7 +17,7 @@ import { parseEmbedUrl } from '../utils/embedParser';
 let currentPlayingPlayerInfo = null;
 
 // Initial emoji set for reactions
-const EMOJI_SET = { '❤️': 0, '\u{1F602}': 0, '🔥': 0, '�': 0 };
+const EMOJI_SET = { '❤️': 0, '\u{1F602}': 0, '🔥': 0, '👎': 0 };
 
 /**
  * Formats a timestamp into a localized date and time string.
