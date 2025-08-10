@@ -55,7 +55,6 @@ const getClientId = () => {
  * @param {string} props.mediaType - Type of the attached media ('image' or 'video').
  * @param {string} props.postId - The ID of the post in Firestore.
  * @param {string} props.access - User's access level ('admin' or 'user').
-
  * @param {function} props.onUpdate - Callback function for post updates (e.g., after deletion).
  */
 export default function PostCard({
@@ -87,8 +86,8 @@ export default function PostCard({
   const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false);
   const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false);
   const [posterClientId, setPosterClientId] = useState(null);
-  const [showAdminDropdown, setShowAdminDropdown] = useState(false); // New state for admin dropdown
-  const adminDropdownRef = useRef(null); // Ref for admin dropdown to handle outside clicks
+  const [showAdminDropdown, setShowAdminDropdown] = useState(false);
+  const adminDropdownRef = useRef(null);
 
   const currentClientId = getClientId();
 
@@ -400,6 +399,7 @@ export default function PostCard({
     } catch (error) {
       console.error("Error resetting reactions:", error);
     }
+    setShowAdminDropdown(false); // Close the dropdown after action
   };
 
   const handleDeleteComment = async (commentId) => {
@@ -625,6 +625,12 @@ export default function PostCard({
                       className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-red-500"
                     >
                       Delete Post
+                    </button>
+                    <button
+                      onClick={handleResetReactions}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      Clear Reactions
                     </button>
                   </div>
                 </div>
