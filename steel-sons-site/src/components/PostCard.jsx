@@ -11,7 +11,7 @@ import { db } from '../lib/firebase';
 import { parseEmbedUrl } from '../utils/embedParser';
 
 // Initial emoji set for reactions
-const EMOJI_SET = { '❤️': 0, '😂': 0, '�': 0, '👎': 0 };
+const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 };
 
 /**
  * Formats a timestamp into a localized date and time string.
@@ -699,4 +699,3 @@ export default function PostCard({
     </div>
   );
 }
-�
