@@ -18,6 +18,165 @@ let currentPlayingPlayerInfo = null;
 const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 };
 
 /**
+ * Custom hook to manage the lifecycle of a video.js player.
+ * @param {object} playerRef - A ref to the video.js player instance.
+ * @param {object} videoRef - A ref to the video DOM element.
+ * @param {string} mediaUrl - The URL of the video file.
+ * @param {string} mediaType - The type of media ('video' or 'image').
+ * @param {string} postId - The ID of the post.
+ * @returns {object} An object containing player state and controls.
+ */
+const useVideoPlayer = (playerRef, videoRef, mediaUrl, mediaType, postId) => {
+  const [videoSource, setVideoSource] = useState(null);
+  const [videoType, setVideoType] = useState(null);
+  const [posterUrl, setPosterUrl] = useState(null);
+  const [showPlayOverlay, setShowPlayOverlay] = useState(true);
+  const [aspect, setAspect] = useState(16 / 9);
+  const [showPoster, setShowPoster] = useState(true);
+
+  // Parse media URL and set source details
+  useEffect(() => {
+    if (mediaType !== 'video' || !mediaUrl) {
+      setVideoSource(null);
+      setVideoType(null);
+      setPosterUrl(null);
+      return;
+    }
+
+    const afterUpload = mediaUrl.split('/upload/')[1];
+    if (!afterUpload) {
+      setPosterUrl(null);
+      setVideoSource(mediaUrl);
+      setVideoType('video/mp4');
+      return;
+    }
+
+    const basePath = afterUpload.replace(/\.(mp4|mov)$/i, '');
+    const hlsUrl = `https://res.cloudinary.com/dsvpfi9te/video/upload/sp_auto/${basePath}.m3u8`;
+    const poster = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
+
+    setPosterUrl(poster);
+    setVideoSource(hlsUrl);
+    setVideoType('application/x-mpegURL');
+  }, [mediaUrl, mediaType, postId]);
+
+  // Handle player initialization and cleanup
+  useEffect(() => {
+    if (!videoRef.current || !videoSource) return;
+
+    if (!playerRef.current) {
+      const player = videojs(videoRef.current, {
+        controls: false,
+        autoplay: false,
+        preload: 'metadata',
+        responsive: true,
+        fluid: true,
+        loop: true,
+        muted: true,
+        poster: posterUrl || undefined,
+      });
+
+      player.src({ src: videoSource, type: videoType });
+
+      player.on('play', () => {
+        setShowPlayOverlay(false);
+        setShowPoster(false);
+      });
+      player.on('pause', () => setShowPlayOverlay(true));
+
+      player.one('playing', () => {
+        try { player.muted(false); } catch {}
+        setShowPoster(false);
+      });
+
+      player.one('loadedmetadata', () => {
+        try {
+          const el = player.el().querySelector('video');
+          if (el && el.videoWidth && el.videoHeight) {
+            const ar = el.videoWidth / el.videoHeight;
+            setAspect(ar > 0 ? ar : 16 / 9);
+          }
+        } catch (err) {
+          setAspect(16 / 9);
+        }
+      });
+
+      const handleError = async () => {
+        const err = player.error();
+        console.warn('Video.js error:', err);
+        try {
+          if (player.currentType() === 'video/mp4') return;
+          if (mediaUrl) {
+            player.src({ src: mediaUrl, type: 'video/mp4' });
+            if (posterUrl) player.poster(posterUrl);
+            await player.play().catch(() => {});
+          }
+        } catch {}
+      };
+      player.on('error', handleError);
+
+      playerRef.current = player;
+    }
+
+    return () => {
+      if (playerRef.current) {
+        const player = playerRef.current;
+        if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === player) {
+          currentPlayingPlayerInfo = null;
+        }
+        player.dispose();
+        playerRef.current = null;
+      }
+    };
+  }, [videoRef, videoSource, videoType, posterUrl, mediaUrl]);
+
+  // Play button click handler
+  const handlePlayClick = useCallback(async () => {
+    const player = playerRef.current;
+    if (!player) return;
+
+    // Pause any other currently playing video
+    if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player !== player) {
+      currentPlayingPlayerInfo.player.pause();
+      currentPlayingPlayerInfo.setShowOverlay(true);
+      currentPlayingPlayerInfo.player.muted(true);
+    }
+
+    try {
+      await player.play();
+      setShowPlayOverlay(false);
+      currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
+    } catch (err) {
+      console.warn('Play was rejected by the browser.', err);
+      // Fallback to direct MP4 source if HLS fails to play
+      try {
+        if (player.currentType() !== 'video/mp4' && mediaUrl) {
+          player.src({ src: mediaUrl, type: 'video/mp4' });
+          if (posterUrl) player.poster(posterUrl);
+          await player.play().catch(() => {});
+          setShowPlayOverlay(false);
+          currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
+        }
+      } catch (err2) {
+        console.error('Fallback play failed:', err2);
+        setShowPlayOverlay(true);
+      }
+    }
+  }, [playerRef, mediaUrl, posterUrl]);
+
+  return {
+    showPlayOverlay,
+    aspect,
+    showPoster,
+    posterUrl,
+    handlePlayClick,
+    setAspect,
+    setShowPoster,
+    videoSource,
+  };
+};
+
+/**
  * Formats a timestamp into a localized date and time string.
  * @param {number} timestamp - The timestamp to format.
  * @returns {string} The formatted date and time string.
@@ -55,11 +214,17 @@ export default function PostCard({
 }) {
   const videoRef = useRef(null);
   const playerRef = useRef(null);
-  const handlerRef = useRef(null); // stable tap handler reference
-  const [videoSource, setVideoSource] = useState(null);
-  const [videoType, setVideoType] = useState(null);
-  const [posterUrl, setPosterUrl] = useState(null);
-  const [showPlayOverlay, setShowPlayOverlay] = useState(true);
+  const {
+    showPlayOverlay,
+    aspect,
+    showPoster,
+    posterUrl,
+    handlePlayClick,
+    setAspect,
+    setShowPoster,
+    videoSource,
+  } = useVideoPlayer(playerRef, videoRef, mediaUrl, mediaType, postId);
+
   const [embed, setEmbed] = useState(null);
   const [postType, setPostType] = useState('general');
   const [tradeData, setTradeData] = useState(null);
@@ -72,8 +237,6 @@ export default function PostCard({
   const [isLoading, setIsLoading] = useState(true);
   const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false);
   const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false);
-  const [aspect, setAspect] = useState(16 / 9); // lock size from metadata; prevents “blow up”
-  const [showPoster, setShowPoster] = useState(true); // draw an <img> until video is actually playing
 
   const postRef = doc(db, 'posts', postId);
 
@@ -125,227 +288,6 @@ export default function PostCard({
 
     return () => unsubscribe();
   }, [postId, onUpdate]);
-
-  // Source & poster selection with safe Cloudinary parsing
-  useEffect(() => {
-    if (mediaType !== 'video' || !mediaUrl) {
-      setVideoSource(null);
-      setVideoType(null);
-      setPosterUrl(null);
-      setShowPoster(false);
-      return;
-    }
-
-    const afterUpload = mediaUrl.split('/upload/')[1];
-    if (!afterUpload) {
-      // Non-standard/unsigned URL: use MP4 directly; we'll still try to keep poster visible until playing
-      setPosterUrl(null);
-      setVideoSource(mediaUrl);
-      setVideoType('video/mp4');
-      setShowPoster(true);
-      return;
-    }
-
-    const basePath = afterUpload.replace(/\.(mp4|mov)$/i, '');
-    const hlsUrl = `https://res.cloudinary.com/dsvpfi9te/video/upload/sp_auto/${basePath}.m3u8`;
-    const poster = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
-
-    setPosterUrl(poster);
-    setVideoSource(hlsUrl);
-    setVideoType('application/x-mpegURL');
-    setShowPoster(true);
-  }, [mediaUrl, mediaType]);
-
-  // Gesture-based play/pause toggle that ignores scrolls, with runtime fallback to MP4
-  const togglePlayTapAware = useCallback(async (e) => {
-    const player = playerRef.current;
-    if (!player) return;
-
-    // Pause any other currently playing video
-    if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player !== player) {
-      currentPlayingPlayerInfo.player.pause();
-      currentPlayingPlayerInfo.setShowOverlay(true);
-      currentPlayingPlayerInfo.player.muted(true);
-    }
-
-    if (player.paused()) {
-      try {
-        await player.play();
-        setShowPlayOverlay(false);
-        currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
-      } catch (err) {
-        console.warn('play() rejected; attempting MP4 fallback', err);
-        try {
-          if (mediaUrl) {
-            player.src({ src: mediaUrl, type: 'video/mp4' });
-            if (posterUrl) player.poster(posterUrl);
-            await player.play();
-            setShowPlayOverlay(false);
-            currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
-          }
-        } catch (err2) {
-          console.error('Fallback play failed:', err2);
-          setShowPlayOverlay(true);
-        }
-      }
-    } else {
-      player.pause();
-      setShowPlayOverlay(true);
-      player.muted(true);
-      currentPlayingPlayerInfo = null;
-    }
-  }, [mediaUrl, posterUrl]);
-
-  // Initialize and manage video.js player
-  useEffect(() => {
-    if (mediaType !== 'video' || !videoRef.current || !videoSource) return;
-
-    if (!playerRef.current) {
-      // Initialize player with conservative, mobile-friendly defaults
-      playerRef.current = videojs(videoRef.current, {
-        controls: false, // we use our overlay
-        autoplay: false,
-        preload: 'metadata',
-        responsive: true,
-        fluid: true, // video.js maintains an internal ratio; we also set CSS aspect-ratio wrapper
-        loop: true,
-        muted: true, // allow autoplay after tap
-        poster: posterUrl || undefined,
-        // html5: { vhs: { overrideNative: true } }, // uncomment if Android Chrome has native HLS quirks
-      });
-
-      const player = playerRef.current;
-
-      // Always set source via API (not <source> tag)
-      player.src({ src: videoSource, type: videoType });
-
-      // Keep overlay state in sync
-      player.on('play', () => {
-        setShowPlayOverlay(false);
-        setShowPoster(false);
-      });
-      player.on('pause', () => setShowPlayOverlay(true));
-
-      // Unmute only after playback actually starts (avoids iOS rejection)
-      player.one('playing', () => {
-        try { player.muted(false); } catch {}
-        setShowPoster(false);
-      });
-
-      // Derive aspect ratio once metadata is ready; locks layout before/after play
-      player.one('loadedmetadata', () => {
-        try {
-          const el = player.el().querySelector('video');
-          if (el && el.videoWidth && el.videoHeight) {
-            const ar = el.videoWidth / el.videoHeight;
-            setAspect(ar > 0 ? ar : 16 / 9);
-          }
-        } catch (err) {
-          setAspect(16 / 9);
-        }
-      });
-
-      // Robust fallback: if HLS fails, swap to MP4 once
-      const handleError = async () => {
-        const err = player.error();
-        console.warn('Video.js error:', err);
-        try {
-          // If already MP4, do nothing
-          if (player.currentType && player.currentType() === 'video/mp4') return;
-          if (mediaUrl) {
-            player.src({ src: mediaUrl, type: 'video/mp4' });
-            if (posterUrl) player.poster(posterUrl);
-            await player.play().catch(() => {});
-          }
-        } catch {}
-      };
-      player.on('error', handleError);
-
-      // Build a tap-aware handler once and keep it stable
-      handlerRef.current = (() => {
-        let startX = 0, startY = 0, startT = 0, moved = false;
-
-        const onPointerDown = (ev) => {
-          startX = ev.clientX ?? (ev.touches?.[0]?.clientX || 0);
-          startY = ev.clientY ?? (ev.touches?.[0]?.clientY || 0);
-          startT = Date.now();
-          moved = false;
-        };
-
-        const onPointerMove = (ev) => {
-          const x = ev.clientX ?? (ev.touches?.[0]?.clientX || 0);
-          const y = ev.clientY ?? (ev.touches?.[0]?.clientY || 0);
-          if (Math.abs(x - startX) > 10 || Math.abs(y - startY) > 10) moved = true;
-        };
-
-        const onPointerUp = (ev) => {
-          const dur = Date.now() - startT;
-          const x = ev.clientX ?? (ev.changedTouches?.[0]?.clientX || 0);
-          const y = ev.clientY ?? (ev.changedTouches?.[0]?.clientY || 0);
-
-          if (!moved && dur < 300) {
-            const rect = player.el().getBoundingClientRect();
-            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-              togglePlayTapAware(ev);
-            }
-          }
-        };
-
-        return { onPointerDown, onPointerMove, onPointerUp };
-      })();
-
-      const videoEl = player.el().querySelector('video');
-      if (videoEl) {
-        // CORS + inline playback hints
-        videoEl.setAttribute('crossorigin', 'anonymous');
-        videoEl.setAttribute('playsinline', 'true');
-        videoEl.setAttribute('webkit-playsinline', 'true');
-
-        // Use pointer/touch listeners tuned for mobile scroll behavior
-        videoEl.addEventListener('touchstart', handlerRef.current.onPointerDown, { passive: true });
-        videoEl.addEventListener('touchmove', handlerRef.current.onPointerMove, { passive: true });
-        videoEl.addEventListener('touchend', handlerRef.current.onPointerUp, { passive: true });
-        videoEl.addEventListener('mousedown', handlerRef.current.onPointerDown);
-        videoEl.addEventListener('mousemove', handlerRef.current.onPointerMove);
-        videoEl.addEventListener('mouseup', handlerRef.current.onPointerUp);
-        // Hint to browsers: vertical pan allowed (don’t treat as pinch/zoom area)
-        videoEl.style.touchAction = 'pan-y';
-      }
-    } else {
-      // Update source when it changes
-      const player = playerRef.current;
-      if (player.currentSrc() !== videoSource) {
-        player.src({ src: videoSource, type: videoType });
-        if (posterUrl) player.poster(posterUrl);
-        setShowPlayOverlay(true);
-      }
-    }
-
-    // Cleanup function
-    return () => {
-      if (playerRef.current) {
-        const player = playerRef.current;
-        const videoEl = player.el()?.querySelector('video');
-
-        if (videoEl && handlerRef.current) {
-          videoEl.removeEventListener('touchstart', handlerRef.current.onPointerDown);
-          videoEl.removeEventListener('touchmove', handlerRef.current.onPointerMove);
-          videoEl.removeEventListener('touchend', handlerRef.current.onPointerUp);
-          videoEl.removeEventListener('mousedown', handlerRef.current.onPointerDown);
-          videoEl.removeEventListener('mousemove', handlerRef.current.onPointerMove);
-          videoEl.removeEventListener('mouseup', handlerRef.current.onPointerUp);
-        }
-
-        // If this player was active, clear global ref
-        if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === player) {
-          currentPlayingPlayerInfo = null;
-        }
-        player.dispose();
-        playerRef.current = null;
-        handlerRef.current = null;
-      }
-    };
-  }, [videoSource, videoType, mediaType, posterUrl, togglePlayTapAware, mediaUrl]);
 
   // Twitter widgets
   useEffect(() => {
@@ -776,11 +718,7 @@ export default function PostCard({
               {showPlayOverlay && (
                 <div
                   className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-20"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    togglePlayTapAware(e);
-                  }}
+                  onClick={handlePlayClick}
                   style={{ touchAction: 'pan-y' }}
                 >
                   <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
