@@ -694,13 +694,10 @@ export default function PostCard({
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            // The entire container is now the tap/click target
             <div
-              className="relative rounded-lg cursor-pointer"
+              className="relative rounded-lg"
               style={{ aspectRatio: aspect || 16 / 9, width: '100%' }}
-              onClick={handleVideoInteraction}
             >
-              {/* Poster image stays on top until playback actually starts */}
               {showPoster && (
                 <img
                   src={posterUrl || ''}
@@ -725,11 +722,13 @@ export default function PostCard({
                 />
               </div>
               {showPlayOverlay && (
-                <div
-                  className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 z-20"
+                <button
+                  onClick={handleVideoInteraction}
+                  className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 z-20 cursor-pointer"
+                  aria-label="Play video"
                 >
-                  <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
-                </div>
+                  <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84"><polygon points="32,24 64,42 32,60" /></svg>
+                </button>
               )}
             </div>
           ) : (
