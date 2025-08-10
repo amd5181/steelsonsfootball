@@ -177,6 +177,12 @@ export default function PostComposer({ onPost }) {
     setUploading(false);
     onPost?.();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // The following line has been added to reload the page on successful post.
+    // This is a forceful reload. The `onPost?.()` prop is the recommended
+    // way to trigger a data refresh in the parent component for a smoother
+    // user experience.
+    window.location.reload();
   };
 
   return (
