@@ -17,7 +17,7 @@ import { parseEmbedUrl } from '../utils/embedParser';
 let currentPlayingPlayerInfo = null;
 
 // Initial emoji set for reactions
-const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 };
+const EMOJI_SET = { '❤️': 0, '\u{1F602}': 0, '🔥': 0, '�': 0 };
 
 /**
  * Formats a timestamp into a localized date and time string.
@@ -123,41 +123,6 @@ export default function PostCard({
     return () => unsubscribe();
   }, [postId, onUpdate]);
 
-  useEffect(() => {
-    // This effect handles video source logic and should only run when mediaUrl or mediaType changes
-    if (mediaType === 'video' && mediaUrl) {
-      // Try to construct an HLS URL first
-      const basePath = mediaUrl.split('/upload/')[1]?.replace(/\.(mp4|mov)$/i, '');
-      const hlsUrl = `https://res.cloudinary.com/dsvpfi9te/video/upload/sp_auto/${basePath}.m3u8`;
-      const poster = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
-      setPosterUrl(poster);
-
-      console.log('Attempting to load HLS video from:', hlsUrl);
-      fetch(hlsUrl, { method: 'HEAD' })
-        .then(res => {
-          if (res.ok) {
-            console.log('HLS source found, setting video source to HLS.');
-            setVideoSource(hlsUrl);
-            setVideoType('application/x-mpegURL');
-          } else {
-            console.log('HLS source not found, falling back to original MP4 URL.');
-            setVideoSource(mediaUrl);
-            setVideoType('video/mp4');
-          }
-        })
-        .catch(error => {
-          console.error('Error checking HLS source, falling back to MP4:', error);
-          setVideoSource(mediaUrl);
-          setVideoType('video/mp4');
-        });
-    } else {
-      // If mediaType is not a video or mediaUrl is null, clear the state
-      setVideoSource(null);
-      setVideoType(null);
-      setPosterUrl(null);
-    }
-  }, [mediaUrl, mediaType]);
-
   const togglePlay = useCallback(() => {
     const player = playerRef.current;
     if (!player) return;
@@ -187,66 +152,104 @@ export default function PostCard({
   }, []);
 
   useEffect(() => {
-    // This effect initializes the video.js player and attaches event listeners
-    if (mediaType === 'video' && videoRef.current && videoSource) {
-      console.log('Initializing video.js with source:', videoSource);
-      if (!playerRef.current) {
-        // Only initialize the player if it doesn't exist
-        playerRef.current = videojs(videoRef.current, {
-          controls: false,
-          autoplay: false,
-          preload: 'auto',
-          responsive: true,
-          fluid: true,
-          loop: true,
-          muted: true,
-          poster: posterUrl,
-        });
+    // This effect handles video source logic and initializes the player.
+    const setupVideoPlayer = async () => {
+      if (mediaType === 'video' && mediaUrl && videoRef.current) {
+        console.log("Setting up video player for postId:", postId);
 
-        const player = playerRef.current;
-        const videoElement = player.el().querySelector('video');
+        // Determine video source and type
+        let sourceToUse = mediaUrl;
+        let typeToUse = 'video/mp4';
+        let posterToUse = null;
 
-        const handleTouchStart = (e) => {
-          touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        };
+        const basePath = mediaUrl.split('/upload/')[1]?.replace(/\.(mp4|mov)$/i, '');
+        if (basePath) {
+          const hlsUrl = `https://res.cloudinary.com/dsvpfi9te/video/upload/sp_auto/${basePath}.m3u8`;
+          const poster = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
 
-        const handleTouchEnd = (e) => {
-          const endX = e.changedTouches[0].clientX;
-          const endY = e.changedTouches[0].clientY;
-          const dx = Math.abs(endX - touchStartPos.current.x);
-          const dy = Math.abs(endY - touchStartPos.current.y);
-          const touchThreshold = 10;
-
-          if (dx < touchThreshold && dy < touchThreshold) {
-            e.preventDefault();
-            e.stopPropagation();
-            togglePlay();
+          console.log('Attempting to load HLS video from:', hlsUrl);
+          try {
+            const res = await fetch(hlsUrl, { method: 'HEAD' });
+            if (res.ok) {
+              console.log('HLS source found, setting video source to HLS.');
+              sourceToUse = hlsUrl;
+              typeToUse = 'application/x-mpegURL';
+              posterToUse = poster;
+            } else {
+              console.log('HLS source not found, falling back to original MP4 URL.');
+              posterToUse = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
+            }
+          } catch (error) {
+            console.error('Error checking HLS source, falling back to MP4:', error);
+            posterToUse = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
           }
-        };
-
-        if (videoElement) {
-          videoElement.addEventListener('touchstart', handleTouchStart);
-          videoElement.addEventListener('touchend', handleTouchEnd);
-          videoElement.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            togglePlay();
-          });
         }
+        setVideoSource(sourceToUse);
+        setVideoType(typeToUse);
+        setPosterUrl(posterToUse);
 
-        player.on('play', () => setShowPlayOverlay(false));
-        player.on('pause', () => setShowPlayOverlay(true));
-        setShowPlayOverlay(true);
-      } else {
-        // If the player exists, but the source has changed, update it.
-        if (playerRef.current.currentSrc() !== videoSource) {
-          console.log('Video source changed, updating player.');
-          playerRef.current.src({ src: videoSource, type: videoType });
-          playerRef.current.poster(posterUrl);
+        // Initialize the player once the source is determined.
+        if (!playerRef.current) {
+          console.log('Initializing video.js with source:', sourceToUse);
+          playerRef.current = videojs(videoRef.current, {
+            controls: false,
+            autoplay: false,
+            preload: 'auto',
+            responsive: true,
+            fluid: true,
+            loop: true,
+            muted: true,
+            poster: posterToUse,
+          });
+
+          const player = playerRef.current;
+          const videoElement = player.el().querySelector('video');
+
+          const handleTouchStart = (e) => {
+            touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          };
+
+          const handleTouchEnd = (e) => {
+            const endX = e.changedTouches[0].clientX;
+            const endY = e.changedTouches[0].clientY;
+            const dx = Math.abs(endX - touchStartPos.current.x);
+            const dy = Math.abs(endY - touchStartPos.current.y);
+            const touchThreshold = 10;
+
+            if (dx < touchThreshold && dy < touchThreshold) {
+              e.preventDefault();
+              e.stopPropagation();
+              togglePlay();
+            }
+          };
+
+          if (videoElement) {
+            videoElement.addEventListener('touchstart', handleTouchStart);
+            videoElement.addEventListener('touchend', handleTouchEnd);
+            videoElement.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              togglePlay();
+            });
+          }
+
+          player.on('play', () => setShowPlayOverlay(false));
+          player.on('pause', () => setShowPlayOverlay(true));
           setShowPlayOverlay(true);
+        } else {
+          // If the player exists, but the source has changed, update it.
+          const currentSrc = playerRef.current.currentSrc();
+          if (currentSrc !== sourceToUse && sourceToUse) {
+            console.log('Video source changed, updating player to:', sourceToUse);
+            playerRef.current.src({ src: sourceToUse, type: typeToUse });
+            playerRef.current.poster(posterToUse);
+            setShowPlayOverlay(true);
+          }
         }
       }
-    }
+    };
+
+    setupVideoPlayer();
 
     return () => {
       // Cleanup function
@@ -269,7 +272,7 @@ export default function PostCard({
         currentPlayingPlayerInfo = null;
       }
     };
-  }, [videoSource, videoType, mediaType, posterUrl, togglePlay]);
+  }, [mediaUrl, mediaType, togglePlay, postId]); // Added postId to dependencies
 
   useEffect(() => {
     if (embed?.type === 'twitter') {
@@ -640,17 +643,16 @@ export default function PostCard({
 
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
-          {mediaType === 'video' && videoSource ? (
-            <div className="relative w-full aspect-video">
-              <div data-vjs-player className="absolute inset-0">
-                <video
-                  ref={videoRef}
-                  className="video-js vjs-theme-forest w-full h-full object-contain"
-                  playsInline
-                >
-                  <source src={videoSource} type={videoType} />
-                </video>
-              </div>
+          {mediaType === 'video' ? (
+            <div
+              data-vjs-player
+              className="relative w-full max-w-full aspect-video rounded-lg" // Combined styling for a simpler, more robust container
+            >
+              <video
+                ref={videoRef}
+                className="video-js vjs-theme-forest w-full h-full"
+                playsInline
+              />
               {showPlayOverlay && (
                 <div
                   className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-10"
@@ -806,4 +808,4 @@ export default function PostCard({
     </div>
   );
 }
-
+�
