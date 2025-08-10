@@ -36,8 +36,8 @@ export default function RecordBook() {
         category: 'Fewest Wins in a Season',
         value: '2',
         holders: [
-          { team: 'Steevie Woodrow', year: '2011' },
-          { team: 'Andrew Simmel', year: '2016' },
+          { team: 'Stevie Woodrow', year: '2011' },
+          { team: 'Andrew Stimmel', year: '2016' },
           { team: 'Ryan Walde', year: '2022' },
         ],
       },
@@ -83,17 +83,17 @@ export default function RecordBook() {
       },
       {
         category: 'Most FAB Left At End of Season',
-        value: '100',
+        value: '$100',
         holders: [{ team: 'Dylan Frank', year: '2020' }],
       },
       {
         category: 'Most Money Spent on a Free Agent',
-        value: '491*',
+        value: '$91*',
         holders: [{ team: 'Ryan Walde (DeVon Achane)', year: '2023' }],
       },
       {
         category: 'Most Money Spent on a Draft Pick',
-        value: '181',
+        value: '$81',
         holders: [{ team: 'Curtis David (Christian McCaffrey)', year: '2020' }],
       },
     ],
@@ -148,7 +148,7 @@ export default function RecordBook() {
         value: '5',
         holders: [
           { team: 'Dylan Frank', year: '2012-2016' },
-          { team: 'Greg Lin', year: '2017-2021' },
+          { team: 'Greg Lim', year: '2017-2021' },
         ],
       },
       {
