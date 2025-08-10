@@ -12,7 +12,6 @@ import { db } from '../lib/firebase';
 import { parseEmbedUrl } from '../utils/embedParser';
 
 // Global variable to track the currently playing video.
-// For a more robust solution in a larger app, consider using React Context API.
 let currentPlayingPlayerInfo = null;
 
 // Initial emoji set for reactions
@@ -56,6 +55,7 @@ export default function PostCard({
 }) {
   const videoRef = useRef(null);
   const playerRef = useRef(null);
+  const handlerRef = useRef(null); // stable tap handler reference
   const [videoSource, setVideoSource] = useState(null);
   const [videoType, setVideoType] = useState(null);
   const [posterUrl, setPosterUrl] = useState(null);
@@ -72,86 +72,96 @@ export default function PostCard({
   const [isLoading, setIsLoading] = useState(true);
   const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false);
   const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false);
-  const [videoError, setVideoError] = useState(false);
-
-  // States for touch detection
-  const touchStartX = useRef(0);
-  const touchStartY = useRef(0);
-  const isDragging = useRef(false);
+  const [aspect, setAspect] = useState(16 / 9); // lock size from metadata; prevents “blow up”
+  const [showPoster, setShowPoster] = useState(true); // draw an <img> until video is actually playing
 
   const postRef = doc(db, 'posts', postId);
 
   // Effect to fetch initial post data and set up real-time listener
   useEffect(() => {
     setIsLoading(true);
-    const unsubscribe = onSnapshot(postRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        setPostType(data.type || 'general');
+    const unsubscribe = onSnapshot(
+      postRef,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setPostType(data.type || 'general');
 
-        if (data.type === 'trade') {
-          setTradeData({
-            giving: data.giving || '',
-            seeking: data.seeking || '',
-            notes: data.notes || '',
-          });
+          if (data.type === 'trade') {
+            setTradeData({
+              giving: data.giving || '',
+              seeking: data.seeking || '',
+              notes: data.notes || '',
+            });
+          } else {
+            setTradeData(null);
+          }
+
+          if (data.type === 'poll') {
+            setPollData(data.poll);
+            const voted = localStorage.getItem(`voted-${postId}`);
+            setHasVoted(!!voted);
+          } else {
+            setPollData(null);
+          }
+
+          const fromFirestore = data.reactions || {};
+          const mergedReactions = { ...EMOJI_SET, ...fromFirestore };
+          setReactions(mergedReactions);
+          setComments(data.comments || []);
+          setEmbed(data.embed || null);
+          setTwitterEmbedFailed(false);
+          setInstagramEmbedFailed(false);
         } else {
-          setTradeData(null);
+          onUpdate?.();
         }
-
-        if (data.type === 'poll') {
-          setPollData(data.poll);
-          const voted = localStorage.getItem(`voted-${postId}`);
-          setHasVoted(!!voted);
-        } else {
-          setPollData(null);
-        }
-
-        const fromFirestore = data.reactions || {};
-        const mergedReactions = { ...EMOJI_SET, ...fromFirestore };
-        setReactions(mergedReactions);
-        setComments(data.comments || []);
-        setEmbed(data.embed || null);
-        setTwitterEmbedFailed(false);
-        setInstagramEmbedFailed(false);
-      } else {
-        console.log("Post does not exist or has been deleted.");
-        onUpdate?.();
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error('Error fetching post data:', error);
+        setIsLoading(false);
       }
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching post data:", error);
-      setIsLoading(false);
-    });
+    );
 
     return () => unsubscribe();
   }, [postId, onUpdate]);
 
-  // Effect to handle video source and type detection (Updated for reliability)
+  // Source & poster selection with safe Cloudinary parsing
   useEffect(() => {
-    if (mediaType === 'video' && mediaUrl) {
-      const basePath = mediaUrl.split('/upload/')[1]?.replace(/\.(mp4|mov)$/i, '');
-      const hlsUrl = `https://res.cloudinary.com/dsvpfi9te/video/upload/sp_auto/${basePath}.m3u8`;
-      const poster = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
-      
-      setPosterUrl(poster);
-
-      // Now the player will handle the HLS fallback to MP4 automatically
-      setVideoSource(mediaUrl); // We'll just use the MP4 url as the primary source for the state
-      setVideoType('video/mp4');
-    } else if (mediaType === 'image') {
+    if (mediaType !== 'video' || !mediaUrl) {
       setVideoSource(null);
       setVideoType(null);
       setPosterUrl(null);
+      setShowPoster(false);
+      return;
     }
+
+    const afterUpload = mediaUrl.split('/upload/')[1];
+    if (!afterUpload) {
+      // Non-standard/unsigned URL: use MP4 directly; we'll still try to keep poster visible until playing
+      setPosterUrl(null);
+      setVideoSource(mediaUrl);
+      setVideoType('video/mp4');
+      setShowPoster(true);
+      return;
+    }
+
+    const basePath = afterUpload.replace(/\.(mp4|mov)$/i, '');
+    const hlsUrl = `https://res.cloudinary.com/dsvpfi9te/video/upload/sp_auto/${basePath}.m3u8`;
+    const poster = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
+
+    setPosterUrl(poster);
+    setVideoSource(hlsUrl);
+    setVideoType('application/x-mpegURL');
+    setShowPoster(true);
   }, [mediaUrl, mediaType]);
 
-
-  // Callback to toggle video play/pause
-  const togglePlay = useCallback(() => {
+  // Gesture-based play/pause toggle that ignores scrolls, with runtime fallback to MP4
+  const togglePlayTapAware = useCallback(async (e) => {
     const player = playerRef.current;
     if (!player) return;
 
+    // Pause any other currently playing video
     if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player !== player) {
       currentPlayingPlayerInfo.player.pause();
       currentPlayingPlayerInfo.setShowOverlay(true);
@@ -159,224 +169,252 @@ export default function PostCard({
     }
 
     if (player.paused()) {
-      player.play().then(() => {
-        player.muted(false);
-        player.poster('');
+      try {
+        await player.play();
         setShowPlayOverlay(false);
         currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
-      }).catch(err => {
-        console.error('Video play error:', err);
-        setVideoError(true);
-        setShowPlayOverlay(true);
-      });
+      } catch (err) {
+        console.warn('play() rejected; attempting MP4 fallback', err);
+        try {
+          if (mediaUrl) {
+            player.src({ src: mediaUrl, type: 'video/mp4' });
+            if (posterUrl) player.poster(posterUrl);
+            await player.play();
+            setShowPlayOverlay(false);
+            currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
+          }
+        } catch (err2) {
+          console.error('Fallback play failed:', err2);
+          setShowPlayOverlay(true);
+        }
+      }
     } else {
       player.pause();
       setShowPlayOverlay(true);
       player.muted(true);
       currentPlayingPlayerInfo = null;
     }
-  }, []);
+  }, [mediaUrl, posterUrl]);
 
-  // Effect to initialize and manage video.js player (Updated for touch sensitivity and error handling)
+  // Initialize and manage video.js player
   useEffect(() => {
-    if (mediaType === 'video' && videoRef.current && mediaUrl) {
-      if (!playerRef.current) {
-        const basePath = mediaUrl.split('/upload/')[1]?.replace(/\.(mp4|mov)$/i, '');
-        const hlsUrl = `https://res.cloudinary.com/dsvpfi9te/video/upload/sp_auto/${basePath}.m3u8`;
-        const poster = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
+    if (mediaType !== 'video' || !videoRef.current || !videoSource) return;
 
-        playerRef.current = videojs(videoRef.current, {
-          controls: false,
-          autoplay: false,
-          preload: 'auto',
-          responsive: true,
-          fluid: true,
-          loop: true,
-          muted: true,
-          poster: poster,
-          sources: [
-            { src: hlsUrl, type: 'application/x-mpegURL' },
-            { src: mediaUrl, type: 'video/mp4' }
-          ]
-        });
+    if (!playerRef.current) {
+      // Initialize player with conservative, mobile-friendly defaults
+      playerRef.current = videojs(videoRef.current, {
+        controls: false, // we use our overlay
+        autoplay: false,
+        preload: 'metadata',
+        responsive: true,
+        fluid: true, // video.js maintains an internal ratio; we also set CSS aspect-ratio wrapper
+        loop: true,
+        muted: true, // allow autoplay after tap
+        poster: posterUrl || undefined,
+        // html5: { vhs: { overrideNative: true } }, // uncomment if Android Chrome has native HLS quirks
+      });
 
-        const player = playerRef.current;
-        const videoElement = player.el().querySelector('video');
-        
-        // Add a handler for source errors
-        player.on('error', () => {
-          console.error('Video source failed to load.');
-          setVideoError(true);
-        });
+      const player = playerRef.current;
 
-        // Touch event handlers to distinguish between tap and scroll
-        const handleTouchStart = (e) => {
-          touchStartX.current = e.touches[0].clientX;
-          touchStartY.current = e.touches[0].clientY;
-          isDragging.current = false;
-        };
+      // Always set source via API (not <source> tag)
+      player.src({ src: videoSource, type: videoType });
 
-        const handleTouchMove = (e) => {
-          const deltaX = Math.abs(e.touches[0].clientX - touchStartX.current);
-          const deltaY = Math.abs(e.touches[0].clientY - touchStartY.current);
-          if (deltaX > 10 || deltaY > 10) {
-            isDragging.current = true;
+      // Keep overlay state in sync
+      player.on('play', () => {
+        setShowPlayOverlay(false);
+        setShowPoster(false);
+      });
+      player.on('pause', () => setShowPlayOverlay(true));
+
+      // Unmute only after playback actually starts (avoids iOS rejection)
+      player.one('playing', () => {
+        try { player.muted(false); } catch {}
+        setShowPoster(false);
+      });
+
+      // Derive aspect ratio once metadata is ready; locks layout before/after play
+      player.one('loadedmetadata', () => {
+        try {
+          const el = player.el().querySelector('video');
+          if (el && el.videoWidth && el.videoHeight) {
+            const ar = el.videoWidth / el.videoHeight;
+            setAspect(ar > 0 ? ar : 16 / 9);
           }
-        };
-
-        const handleTouchEnd = (e) => {
-          if (!isDragging.current) {
-            e.preventDefault();
-            e.stopPropagation();
-            togglePlay();
-          }
-          isDragging.current = false;
-        };
-
-        // Add event listeners to the video element
-        if (videoElement) {
-          videoElement.addEventListener('touchstart', handleTouchStart);
-          videoElement.addEventListener('touchmove', handleTouchMove);
-          videoElement.addEventListener('touchend', handleTouchEnd);
-          videoElement.addEventListener('click', togglePlay); // Keep click for desktop
+        } catch (err) {
+          setAspect(16 / 9);
         }
+      });
 
-        player.on('play', () => {
-          setShowPlayOverlay(false);
-          setVideoError(false); // Clear error on successful play
-        });
-        player.on('pause', () => setShowPlayOverlay(true));
-        
+      // Robust fallback: if HLS fails, swap to MP4 once
+      const handleError = async () => {
+        const err = player.error();
+        console.warn('Video.js error:', err);
+        try {
+          // If already MP4, do nothing
+          if (player.currentType && player.currentType() === 'video/mp4') return;
+          if (mediaUrl) {
+            player.src({ src: mediaUrl, type: 'video/mp4' });
+            if (posterUrl) player.poster(posterUrl);
+            await player.play().catch(() => {});
+          }
+        } catch {}
+      };
+      player.on('error', handleError);
+
+      // Build a tap-aware handler once and keep it stable
+      handlerRef.current = (() => {
+        let startX = 0, startY = 0, startT = 0, moved = false;
+
+        const onPointerDown = (ev) => {
+          startX = ev.clientX ?? (ev.touches?.[0]?.clientX || 0);
+          startY = ev.clientY ?? (ev.touches?.[0]?.clientY || 0);
+          startT = Date.now();
+          moved = false;
+        };
+
+        const onPointerMove = (ev) => {
+          const x = ev.clientX ?? (ev.touches?.[0]?.clientX || 0);
+          const y = ev.clientY ?? (ev.touches?.[0]?.clientY || 0);
+          if (Math.abs(x - startX) > 10 || Math.abs(y - startY) > 10) moved = true;
+        };
+
+        const onPointerUp = (ev) => {
+          const dur = Date.now() - startT;
+          const x = ev.clientX ?? (ev.changedTouches?.[0]?.clientX || 0);
+          const y = ev.clientY ?? (ev.changedTouches?.[0]?.clientY || 0);
+
+          if (!moved && dur < 300) {
+            const rect = player.el().getBoundingClientRect();
+            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+              togglePlayTapAware(ev);
+            }
+          }
+        };
+
+        return { onPointerDown, onPointerMove, onPointerUp };
+      })();
+
+      const videoEl = player.el().querySelector('video');
+      if (videoEl) {
+        // CORS + inline playback hints
+        videoEl.setAttribute('crossorigin', 'anonymous');
+        videoEl.setAttribute('playsinline', 'true');
+        videoEl.setAttribute('webkit-playsinline', 'true');
+
+        // Use pointer/touch listeners tuned for mobile scroll behavior
+        videoEl.addEventListener('touchstart', handlerRef.current.onPointerDown, { passive: true });
+        videoEl.addEventListener('touchmove', handlerRef.current.onPointerMove, { passive: true });
+        videoEl.addEventListener('touchend', handlerRef.current.onPointerUp, { passive: true });
+        videoEl.addEventListener('mousedown', handlerRef.current.onPointerDown);
+        videoEl.addEventListener('mousemove', handlerRef.current.onPointerMove);
+        videoEl.addEventListener('mouseup', handlerRef.current.onPointerUp);
+        // Hint to browsers: vertical pan allowed (don’t treat as pinch/zoom area)
+        videoEl.style.touchAction = 'pan-y';
+      }
+      }
+    } else {
+      // Update source when it changes
+      const player = playerRef.current;
+      if (player.currentSrc() !== videoSource) {
+        player.src({ src: videoSource, type: videoType });
+        if (posterUrl) player.poster(posterUrl);
         setShowPlayOverlay(true);
       }
     }
 
+    // Cleanup function
     return () => {
       if (playerRef.current) {
         const player = playerRef.current;
-        const videoElement = player.el().querySelector('video');
-        if (videoElement) {
-          // It is crucial to remove listeners with the exact same functions used to add them.
-          const handleTouchStart = (e) => {
-            touchStartX.current = e.touches[0].clientX;
-            touchStartY.current = e.touches[0].clientY;
-            isDragging.current = false;
-          };
-          const handleTouchMove = (e) => {
-            const deltaX = Math.abs(e.touches[0].clientX - touchStartX.current);
-            const deltaY = Math.abs(e.touches[0].clientY - touchStartY.current);
-            if (deltaX > 10 || deltaY > 10) {
-              isDragging.current = true;
-            }
-          };
-          const handleTouchEnd = (e) => {
-            if (!isDragging.current) {
-              e.preventDefault();
-              e.stopPropagation();
-              togglePlay();
-            }
-            isDragging.current = false;
-          };
-          
-          videoElement.removeEventListener('touchstart', handleTouchStart);
-          videoElement.removeEventListener('touchmove', handleTouchMove);
-          videoElement.removeEventListener('touchend', handleTouchEnd);
-          videoElement.removeEventListener('click', togglePlay);
+        const videoEl = player.el()?.querySelector('video');
+
+        if (videoEl && handlerRef.current) {
+          videoEl.removeEventListener('touchstart', handlerRef.current.onPointerDown);
+          videoEl.removeEventListener('touchmove', handlerRef.current.onPointerMove);
+          videoEl.removeEventListener('touchend', handlerRef.current.onPointerUp);
+          videoEl.removeEventListener('mousedown', handlerRef.current.onPointerDown);
+          videoEl.removeEventListener('mousemove', handlerRef.current.onPointerMove);
+          videoEl.removeEventListener('mouseup', handlerRef.current.onPointerUp);
+        }
+
+        // If this player was active, clear global ref
+        if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === player) {
+          currentPlayingPlayerInfo = null;
         }
         player.dispose();
         playerRef.current = null;
-      }
-      if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === playerRef.current) {
-        currentPlayingPlayerInfo = null;
+        handlerRef.current = null;
       }
     };
-  }, [mediaType, mediaUrl, togglePlay]);
+  }, [videoSource, videoType, mediaType, posterUrl, togglePlayTapAware, mediaUrl]);
 
+  // Twitter widgets
   useEffect(() => {
-    if (embed?.type === 'twitter') {
-      const loadTwitterWidgets = () => {
-        if (window.twttr && window.twttr.widgets) {
-          const targetElement = document.getElementById(`tweet-embed-${postId}`);
-          setTimeout(() => {
-            if (targetElement) {
-              window.twttr.widgets.load(targetElement)
-                .then((el) => {
-                  console.log("Twitter widget loaded successfully for postId:", postId, el);
-                  setTwitterEmbedFailed(false);
-                })
-                .catch((err) => {
-                  console.error("Error loading Twitter widget for postId:", postId, err);
-                  setTwitterEmbedFailed(true);
-                });
-            } else {
-              console.warn("Twitter Embed - Target element not found for postId:", postId);
+    if (embed?.type !== 'twitter') return;
+
+    const loadTwitterWidgets = () => {
+      const targetElement = document.getElementById(`tweet-embed-${postId}`);
+      if (!targetElement) {
+        setTwitterEmbedFailed(true);
+        return;
+      }
+      try {
+        if (window.twttr?.widgets?.load) {
+          window.twttr.widgets
+            .load(targetElement)
+            .then(() => setTwitterEmbedFailed(false))
+            .catch((err) => {
+              console.error('Twitter load error:', err);
               setTwitterEmbedFailed(true);
-            }
-          }, 100);
+            });
         } else {
-          console.warn("Twitter Embed - window.twttr or window.twttr.widgets not available.");
           setTwitterEmbedFailed(true);
         }
-      };
-
-      if (typeof window.twttr === 'undefined') {
-        const script = document.createElement('script');
-        script.setAttribute('src', 'https://platform.twitter.com/widgets.js');
-        script.setAttribute('async', '');
-        script.setAttribute('charset', 'utf-8');
-        document.body.appendChild(script);
-        script.onload = () => {
-          loadTwitterWidgets();
-        };
-        script.onerror = (e) => {
-          console.error("Twitter Embed - Failed to load widgets.js script:", e);
-          setTwitterEmbedFailed(true);
-        };
-      } else {
-        loadTwitterWidgets();
+      } catch (e) {
+        setTwitterEmbedFailed(true);
       }
+    };
+
+    if (typeof window.twttr === 'undefined') {
+      const script = document.createElement('script');
+      script.setAttribute('src', 'https://platform.twitter.com/widgets.js');
+      script.setAttribute('async', '');
+      script.setAttribute('charset', 'utf-8');
+      document.body.appendChild(script);
+      script.onload = loadTwitterWidgets;
+      script.onerror = () => setTwitterEmbedFailed(true);
+    } else {
+      loadTwitterWidgets();
     }
   }, [embed, postId]);
 
+  // Instagram widgets
   useEffect(() => {
-    if (embed?.type === 'instagram') {
-      const loadInstagramWidgets = () => {
-        if (window.instgrm && window.instgrm.Embeds) {
-          setTimeout(() => {
-            try {
-              window.instgrm.Embeds.process();
-              console.log("Instagram widget processed successfully for postId:", postId);
-              setInstagramEmbedFailed(false);
-            } catch (err) {
-              console.error("Error processing Instagram widget for postId:", postId, err);
-              setInstagramEmbedFailed(true);
-            }
-          }, 100);
+    if (embed?.type !== 'instagram') return;
+
+    const process = () => {
+      try {
+        if (window.instgrm?.Embeds?.process) {
+          window.instgrm.Embeds.process();
+          setInstagramEmbedFailed(false);
         } else {
-          console.warn("Instagram Embed - window.instgrm or window.instgrm.Embeds not available.");
           setInstagramEmbedFailed(true);
         }
-      };
-
-      if (typeof window.instgrm === 'undefined') {
-        console.log("Instagram Embed - Loading embed.js script...");
-        const script = document.createElement('script');
-        script.setAttribute('src', 'https://www.instagram.com/embed.js');
-        script.setAttribute('async', '');
-        script.setAttribute('charset', 'utf-8');
-        document.body.appendChild(script);
-        script.onload = () => {
-          console.log("Instagram Embed - embed.js script loaded.");
-          loadInstagramWidgets();
-        };
-        script.onerror = (e) => {
-          console.error("Instagram Embed - Failed to load embed.js script:", e);
-          setInstagramEmbedFailed(true);
-        };
-      } else {
-        console.log("Instagram Embed - embed.js script already loaded, attempting to process widgets.");
-        loadInstagramWidgets();
+      } catch (e) {
+        setInstagramEmbedFailed(true);
       }
+    };
+
+    if (typeof window.instgrm === 'undefined') {
+      const script = document.createElement('script');
+      script.setAttribute('src', 'https://www.instagram.com/embed.js');
+      script.setAttribute('async', '');
+      script.setAttribute('charset', 'utf-8');
+      document.body.appendChild(script);
+      script.onload = process;
+      script.onerror = () => setInstagramEmbedFailed(true);
+    } else {
+      process();
     }
   }, [embed, postId]);
 
@@ -386,13 +424,16 @@ export default function PostCard({
    */
   const handleReaction = async (emoji) => {
     try {
-      setReactions(prev => ({ ...prev, [emoji]: (prev[emoji] || 0) + 1 }));
+      setReactions((prev) => ({ ...prev, [emoji]: (prev[emoji] || 0) + 1 }));
       await updateDoc(postRef, {
         [`reactions.${emoji}`]: increment(1),
       });
     } catch (error) {
-      console.error("Error updating reaction:", error);
-      setReactions(prev => ({ ...prev, [emoji]: (prev[emoji] || 0) - 1 }));
+      console.error('Error updating reaction:', error);
+      setReactions((prev) => ({
+        ...prev,
+        [emoji]: Math.max((prev[emoji] || 1) - 1, 0),
+      }));
     }
   };
 
@@ -410,8 +451,10 @@ export default function PostCard({
       id: crypto.randomUUID(),
     };
 
-    const updated = [...comments, comment];
+    const prev = comments;
+    const updated = [...prev, comment];
     setComments(updated);
+
     setNewComment('');
 
     try {
@@ -419,8 +462,8 @@ export default function PostCard({
         comments: updated,
       });
     } catch (error) {
-      console.error("Error adding comment:", error);
-      setComments(comments);
+      console.error('Error adding comment:', error);
+      setComments(prev);
     }
   };
 
@@ -439,7 +482,7 @@ export default function PostCard({
       await deleteDoc(postRef);
       onUpdate?.();
     } catch (error) {
-      console.error("Error deleting post:", error);
+      console.error('Error deleting post:', error);
     } finally {
       setShowDeleteConfirm(false);
     }
@@ -453,7 +496,7 @@ export default function PostCard({
       await updateDoc(postRef, { reactions: EMOJI_SET });
       setReactions(EMOJI_SET);
     } catch (error) {
-      console.error("Error resetting reactions:", error);
+      console.error('Error resetting reactions:', error);
     }
   };
 
@@ -462,13 +505,14 @@ export default function PostCard({
    * @param {string} commentId - The ID of the comment to delete.
    */
   const handleDeleteComment = async (commentId) => {
-    const updated = comments.filter(c => c.id !== commentId);
+    const prev = comments;
+    const updated = prev.filter((c) => c.id !== commentId);
     setComments(updated);
     try {
       await updateDoc(postRef, { comments: updated });
     } catch (error) {
-      console.error("Error deleting comment:", error);
-      setComments(comments);
+      console.error('Error deleting comment:', error);
+      setComments(prev);
     }
   };
 
@@ -484,7 +528,6 @@ export default function PostCard({
       type = parsed.type;
       url = parsed.url;
     } else {
-      console.warn("renderEmbed - Failed to parse embed URL:", embed.url);
       return null;
     }
 
@@ -541,7 +584,12 @@ export default function PostCard({
           {twitterEmbedFailed ? (
             <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
               <p className="font-semibold mb-2">Could not load Twitter post.</p>
-              <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline"
+              >
                 Click here to view the post on X.com
               </a>
             </div>
@@ -559,7 +607,12 @@ export default function PostCard({
     if (type === 'tiktok') {
       return (
         <div className="mt-4">
-          <blockquote className="tiktok-embed" cite={url} data-video-id="" style={{ maxWidth: '605px', margin: '0 auto' }}>
+          <blockquote
+            className="tiktok-embed"
+            cite={url}
+            data-video-id=""
+            style={{ maxWidth: '605px', margin: '0 auto' }}
+          >
             <a href={url}></a>
           </blockquote>
         </div>
@@ -572,7 +625,12 @@ export default function PostCard({
           {instagramEmbedFailed ? (
             <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
               <p className="font-semibold mb-2">Could not load Instagram post.</p>
-              <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline"
+              >
                 Click here to view the post on Instagram
               </a>
             </div>
@@ -608,7 +666,12 @@ export default function PostCard({
 
     return (
       <div className="mt-4">
-        <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 underline"
+        >
           View Embedded Link
         </a>
       </div>
@@ -631,6 +694,7 @@ export default function PostCard({
 
   return (
     <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6 mb-6 border-l-8 border-rose-400 relative font-sans">
+      {/* Custom Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-xl text-center">
@@ -680,33 +744,48 @@ export default function PostCard({
 
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
-          {mediaType === 'video' && mediaUrl ? (
-            // Added a container with an aspect ratio for consistent sizing
-            <div data-vjs-player className="relative aspect-video">
-              {videoError ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-red-100 text-red-700 p-4">
-                  <p className="font-semibold">Video failed to load.</p>
+          {mediaType === 'video' && videoSource ? (
+            // Size is pre-locked via CSS aspect-ratio; no “blow up” on play.
+            <div
+              className="relative rounded-lg"
+              style={{ aspectRatio: aspect || 16 / 9, width: '100%' }}
+            >
+              {/* Poster image stays on top until playback actually starts */}
+              {showPoster && (
+                <img
+                  src={posterUrl || ''}
+                  alt="video poster"
+                  className="absolute inset-0 w-full h-full object-cover z-10"
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    if (img.naturalWidth && img.naturalHeight) {
+                      const ar = img.naturalWidth / img.naturalHeight;
+                      if (ar > 0) setAspect(ar);
+                    }
+                  }}
+                  onError={() => setShowPoster(false)}
+                />
+              )}
+
+              <div data-vjs-player className="absolute inset-0">
+                <video
+                  ref={videoRef}
+                  className="video-js rounded-lg w-full h-full object-cover"
+                  playsInline
+                />
+              </div>
+              {showPlayOverlay && (
+                <div
+                  className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-20"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    togglePlayTapAware(e);
+                  }}
+                  style={{ touchAction: 'pan-y' }}
+                >
+                  <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
                 </div>
-              ) : (
-                <>
-                  <video
-                    ref={videoRef}
-                    className="video-js rounded-lg w-full h-full"
-                    playsInline
-                  />
-                  {showPlayOverlay && (
-                    <div
-                      className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-10"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        togglePlay();
-                      }}
-                    >
-                      <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
-                    </div>
-                  )}
-                </>
               )}
             </div>
           ) : (
@@ -721,8 +800,10 @@ export default function PostCard({
         </div>
       )}
 
+      {/* Embed block rendering using the renderEmbed function */}
       {renderEmbed()}
 
+      {/* TRADE BLOCK RENDERING */}
       {postType === 'trade' && tradeData && (
         <div className="mt-4 border rounded-lg p-4 bg-yellow-50">
           <h4 className="text-sm font-bold text-yellow-700 uppercase mb-2">Trade Block</h4>
@@ -738,6 +819,7 @@ export default function PostCard({
         </div>
       )}
 
+      {/* POLL RENDERING */}
       {postType === 'poll' && pollData && (
         <div className="mt-4 border rounded-lg p-4 bg-blue-50">
           <h4 className="text-sm font-bold text-blue-700 uppercase mb-2">Poll</h4>
@@ -759,13 +841,13 @@ export default function PostCard({
 
                         localStorage.setItem(`voted-${postId}`, '1');
                         setHasVoted(true);
-                        setPollData(prev => ({
+                        setPollData((prev) => ({
                           ...prev,
                           options: updatedOptions,
                         }));
                       } catch (error) {
-                        console.error("Error voting on poll:", error);
-                        setPollData(prev => ({
+                        console.error('Error voting on poll:', error);
+                        setPollData((prev) => ({
                           ...prev,
                           options: pollData.options,
                         }));
