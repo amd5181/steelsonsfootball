@@ -11,11 +11,8 @@ import {
 import { db } from '../lib/firebase';
 import { parseEmbedUrl } from '../utils/embedParser';
 
-// Global variable to track the currently playing video.
-let currentPlayingPlayerInfo = null;
-
 // Initial emoji set for reactions
-const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 };
+const EMOJI_SET = { '❤️': 0, '😂': 0, '�': 0, '👎': 0 };
 
 /**
  * Custom hook to manage the lifecycle of a video.js player.
@@ -23,10 +20,9 @@ const EMOJI_SET = { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 };
  * @param {object} videoRef - A ref to the video DOM element.
  * @param {string} mediaUrl - The URL of the video file.
  * @param {string} mediaType - The type of media ('video' or 'image').
- * @param {string} postId - The ID of the post.
  * @returns {object} An object containing player state and controls.
  */
-const useVideoPlayer = (playerRef, videoRef, mediaUrl, mediaType, postId) => {
+const useVideoPlayer = (playerRef, videoRef, mediaUrl, mediaType) => {
   const [videoSource, setVideoSource] = useState(null);
   const [videoType, setVideoType] = useState(null);
   const [posterUrl, setPosterUrl] = useState(null);
@@ -58,7 +54,7 @@ const useVideoPlayer = (playerRef, videoRef, mediaUrl, mediaType, postId) => {
     setPosterUrl(poster);
     setVideoSource(hlsUrl);
     setVideoType('application/x-mpegURL');
-  }, [mediaUrl, mediaType, postId]);
+  }, [mediaUrl, mediaType]);
 
   // Handle player initialization and cleanup
   useEffect(() => {
@@ -81,6 +77,7 @@ const useVideoPlayer = (playerRef, videoRef, mediaUrl, mediaType, postId) => {
       player.on('play', () => {
         setShowPlayOverlay(false);
         setShowPoster(false);
+        player.muted(false); // Unmute on play
       });
       player.on('pause', () => setShowPlayOverlay(true));
       
@@ -121,35 +118,24 @@ const useVideoPlayer = (playerRef, videoRef, mediaUrl, mediaType, postId) => {
 
     return () => {
       if (playerRef.current) {
-        const player = playerRef.current;
-        if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === player) {
-          currentPlayingPlayerInfo = null;
-        }
-        player.dispose();
+        playerRef.current.dispose();
         playerRef.current = null;
       }
     };
-  }, [videoRef, videoSource, videoType, posterUrl, mediaUrl]);
+  }, [videoRef, videoSource, videoType, posterUrl, mediaUrl, playerRef]);
+
 
   /**
-   * Toggles play/pause and handles other videos.
+   * Toggles play/pause of the video.
    */
   const handleVideoInteraction = useCallback(async () => {
     const player = playerRef.current;
     if (!player) return;
 
-    // Pause any other currently playing video
-    if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player !== player) {
-      currentPlayingPlayerInfo.player.pause();
-      currentPlayingPlayerInfo.setShowOverlay(true);
-      currentPlayingPlayerInfo.player.muted(true);
-    }
-
     if (player.paused()) {
       try {
         await player.play();
         setShowPlayOverlay(false);
-        currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
       } catch (err) {
         console.warn('Play was rejected by the browser.', err);
         // Fallback to direct MP4 source if HLS fails to play
@@ -159,7 +145,6 @@ const useVideoPlayer = (playerRef, videoRef, mediaUrl, mediaType, postId) => {
             if (posterUrl) player.poster(posterUrl);
             await player.play().catch(() => {});
             setShowPlayOverlay(false);
-            currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
           }
         } catch (err2) {
           console.error('Fallback play failed:', err2);
@@ -180,7 +165,6 @@ const useVideoPlayer = (playerRef, videoRef, mediaUrl, mediaType, postId) => {
     handleVideoInteraction,
     setAspect,
     setShowPoster,
-    videoSource,
   };
 };
 
@@ -230,8 +214,7 @@ export default function PostCard({
     handleVideoInteraction,
     setAspect,
     setShowPoster,
-    videoSource,
-  } = useVideoPlayer(playerRef, videoRef, mediaUrl, mediaType, postId);
+  } = useVideoPlayer(playerRef, videoRef, mediaUrl, mediaType);
 
   const [embed, setEmbed] = useState(null);
   const [postType, setPostType] = useState('general');
@@ -693,7 +676,7 @@ export default function PostCard({
 
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
-          {mediaType === 'video' && videoSource ? (
+          {mediaType === 'video' ? (
             <div
               className="relative rounded-lg"
               style={{ aspectRatio: aspect || 16 / 9, width: '100%' }}
@@ -713,7 +696,6 @@ export default function PostCard({
                   onError={() => setShowPoster(false)}
                 />
               )}
-
               <div data-vjs-player className="absolute inset-0">
                 <video
                   ref={videoRef}
@@ -872,3 +854,4 @@ export default function PostCard({
     </div>
   );
 }
+�
