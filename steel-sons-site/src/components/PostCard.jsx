@@ -706,7 +706,8 @@ export default function PostCard({
             <div data-vjs-player className="relative max-h-[100px]">
               <video
                 ref={videoRef}
-                className="video-js rounded-lg w-full"
+                className="video-js rounded-lg w-full max-h-[700px] object-contain"
+                style={{ maxHeight: '700px' }}
                 playsInline
               >
                 <source src={videoSource} type={videoType} />
