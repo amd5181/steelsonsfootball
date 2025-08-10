@@ -201,7 +201,7 @@ export default function PostCard({
           autoplay: false,
           preload: 'auto',
           responsive: true,
-          fill: true,
+          fluid: true,
           loop: true,
           muted: true, // Start muted to allow autoplay without user interaction
           poster: posterUrl,
@@ -704,12 +704,15 @@ export default function PostCard({
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            <div className="relative w-full aspect-video max-h-[80dvh] sm:max-h-[500px]">
-              {/* Player fills this box */}
-              <div data-vjs-player className="absolute inset-0">
+            <div
+              className={`relative w-full transition-[max-height] duration-300 ease-out
+                ${showPlayOverlay ? 'max-h-[45svh]' : 'max-h-[88svh]'} md:max-h-[500px]`}
+            >
+              {/* Let video.js handle fluid sizing; we just cap the container height */}
+              <div data-vjs-player className="w-full">
                 <video
                   ref={videoRef}
-                  className="video-js vjs-fill rounded-lg"
+                  className="video-js vjs-fluid rounded-lg"
                   playsInline
                 >
                   <source src={videoSource} type={videoType} />
