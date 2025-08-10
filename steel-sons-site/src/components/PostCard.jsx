@@ -186,7 +186,6 @@ export default function PostCard({
         } catch (err2) {
           console.error('Fallback play failed:', err2);
           setShowPlayOverlay(true);
-        }
       }
     } else {
       player.pause();
