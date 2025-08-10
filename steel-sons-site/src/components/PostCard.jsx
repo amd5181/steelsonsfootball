@@ -186,6 +186,7 @@ export default function PostCard({
         } catch (err2) {
           console.error('Fallback play failed:', err2);
           setShowPlayOverlay(true);
+        }
       }
     } else {
       player.pause();
@@ -309,7 +310,6 @@ export default function PostCard({
         videoEl.addEventListener('mouseup', handlerRef.current.onPointerUp);
         // Hint to browsers: vertical pan allowed (don’t treat as pinch/zoom area)
         videoEl.style.touchAction = 'pan-y';
-      }
       }
     } else {
       // Update source when it changes
