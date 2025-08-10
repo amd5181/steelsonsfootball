@@ -3,7 +3,7 @@ import React from 'react';
 export default function RecordBook() {
   // Data parsed from the provided image
   const regularSeasonRecords = [
-    { category: 'Highest Single Week', value: '163.30', team: 'Glen Halperin', year: '2020 (Wk 2)' },
+    { category: 'Highest Single Week', value: '189.34', team: 'Glen Halperin', year: '2020 (Wk 2)' },
     { category: 'Lowest Single Week w/ Full Lineup Set', value: '43.88', team: 'Matt Nese', year: '2022 (Wk 14)' },
     { category: 'Longest Win Streak', value: '11', team: 'Ian Very', year: '2016' },
     { category: 'Longest Losing Streak', value: '9', team: 'Cheese & Platz', year: '2021' },
