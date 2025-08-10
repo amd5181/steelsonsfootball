@@ -201,7 +201,7 @@ export default function PostCard({
           autoplay: false,
           preload: 'auto',
           responsive: true,
-          fluid: true,
+          fill: true,
           loop: true,
           muted: true, // Start muted to allow autoplay without user interaction
           poster: posterUrl,
@@ -709,33 +709,39 @@ export default function PostCard({
                 ${showPlayOverlay ? 'max-h-[85svh]' : 'max-h-[85svh]'} md:max-h-[700px]`}
             >
               {/* Let video.js handle fluid sizing; we just cap the container height */}
-              <div data-vjs-player className="w-full">
-                <video
-                  ref={videoRef}
-                  className="video-js vjs-fluid rounded-lg"
-                  playsInline
-                >
-                  <source src={videoSource} type={videoType} />
-                </video>
+              <div
+                className={`relative w-full transition-[height] duration-300 ease-out
+                  ${showPlayOverlay ? 'h-[52svh]' : 'h-[88svh]'} md:h-[500px]`}
+              >
+                {/* Player fills this box */}
+                <div data-vjs-player className="absolute inset-0">
+                  <video
+                    ref={videoRef}
+                    className="video-js vjs-fill rounded-lg"
+                    style={{ objectFit: 'contain' }}
+                    playsInline
+                  >
+                    <source src={videoSource} type={videoType} />
+                  </video>
+                </div>
+              
+                {showPlayOverlay && (
+                  <button
+                    type="button"
+                    className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/20 z-10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      togglePlay();
+                    }}
+                    aria-label="Play video"
+                  >
+                    <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-hidden="true">
+                      <polygon points="32,24 64,42 32,60" />
+                    </svg>
+                  </button>
+                )}
               </div>
-            
-              {showPlayOverlay && (
-                <button
-                  type="button"
-                  className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/20 z-10"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    togglePlay();
-                  }}
-                  aria-label="Play video"
-                >
-                  <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-hidden="true">
-                    <polygon points="32,24 64,42 32,60" />
-                  </svg>
-                </button>
-              )}
-            </div>
 
           ) : (
             mediaType === 'image' && (
