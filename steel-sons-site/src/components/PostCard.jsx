@@ -200,7 +200,7 @@ export default function PostCard({
           autoplay: false,
           preload: 'auto',
           responsive: true,
-          fluid: true,
+          fluid: false, // IMPORTANT: disable fluid so our max-height is respected
           loop: true,
           muted: true, // Start muted to allow autoplay without user interaction
           poster: posterUrl,
@@ -211,27 +211,27 @@ export default function PostCard({
 
         // NEW: Event handlers for more deliberate touch detection on mobile
         const handleTouchStart = (e) => {
-            // Store the initial touch position
-            touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          // Store the initial touch position
+          touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         };
 
         const handleTouchEnd = (e) => {
-            // Get the final touch position
-            const endX = e.changedTouches[0].clientX;
-            const endY = e.changedTouches[0].clientY;
-            // Calculate the distance moved
-            const dx = Math.abs(endX - touchStartPos.current.x);
-            const dy = Math.abs(endY - touchStartPos.current.y);
+          // Get the final touch position
+          const endX = e.changedTouches[0].clientX;
+          const endY = e.changedTouches[0].clientY;
+          // Calculate the distance moved
+          const dx = Math.abs(endX - touchStartPos.current.x);
+          const dy = Math.abs(endY - touchStartPos.current.y);
 
-            // Define a small threshold to distinguish a tap from a scroll
-            const touchThreshold = 10; // in pixels
+          // Define a small threshold to distinguish a tap from a scroll
+          const touchThreshold = 10; // in pixels
 
-            if (dx < touchThreshold && dy < touchThreshold) {
-                // If the movement was minimal, treat it as a deliberate tap
-                e.preventDefault();
-                e.stopPropagation();
-                togglePlay();
-            }
+          if (dx < touchThreshold && dy < touchThreshold) {
+            // If the movement was minimal, treat it as a deliberate tap
+            e.preventDefault();
+            e.stopPropagation();
+            togglePlay();
+          }
         };
 
         // Add event listeners to the video element
@@ -267,14 +267,14 @@ export default function PostCard({
         const player = playerRef.current;
         const videoElement = player.el().querySelector('video');
         if (videoElement) {
-            // Remove event listeners
-            videoElement.removeEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                togglePlay();
-            });
-            videoElement.removeEventListener('touchstart', () => {});
-            videoElement.removeEventListener('touchend', () => {});
+          // Remove event listeners
+          videoElement.removeEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            togglePlay();
+          });
+          videoElement.removeEventListener('touchstart', () => {});
+          videoElement.removeEventListener('touchend', () => {});
         }
         playerRef.current.dispose(); // Dispose of the video.js player
         playerRef.current = null;
@@ -703,11 +703,11 @@ export default function PostCard({
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            <div data-vjs-player className="relative max-h-[100px]">
+            <div data-vjs-player className="relative">{/* removed wrapper max-h to avoid fighting player sizing */}
               <video
                 ref={videoRef}
-                className="video-js rounded-lg w-full max-h-[700px] object-contain"
-                style={{ maxHeight: '700px' }}
+                className="video-js ss-player rounded-lg w-full object-contain"
+                style={{ maxHeight: 'min(80vh, 600px)' }}
                 playsInline
               >
                 <source src={videoSource} type={videoType} />
