@@ -76,6 +76,9 @@ export default function PostCard({
   const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false); // State to track Twitter embed failure
   const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false); // State to track Instagram embed failure
 
+  // NEW: State to track touch start position for distinguishing taps from scrolls
+  const touchStartPos = useRef({ x: 0, y: 0 });
+
   const postRef = doc(db, 'posts', postId);
 
   // Effect to fetch initial post data and set up real-time listener
@@ -131,18 +134,33 @@ export default function PostCard({
   // Effect to handle video source and type detection
   useEffect(() => {
     if (mediaType === 'video' && mediaUrl) {
-      // For simplicity and stability, we will directly use the provided MP4 URL.
-      // HLS logic is removed to avoid potential Cloudinary processing delays or errors.
-      const poster = mediaUrl.replace(/\.(mp4|mov|mkv)$/i, '.jpg') + "?so_0";
+      const basePath = mediaUrl.split('/upload/')[1]?.replace(/\.(mp4|mov)$/i, '');
+      const hlsUrl = `https://res.cloudinary.com/dsvpfi9te/video/upload/sp_auto/${basePath}.m3u8`;
+      const poster = `https://res.cloudinary.com/dsvpfi9te/video/upload/so_0/${basePath}.jpg`;
+
       setPosterUrl(poster);
-      setVideoSource(mediaUrl);
-      setVideoType('video/mp4');
+
+      // Check for HLS availability first
+      fetch(hlsUrl, { method: 'HEAD' })
+        .then(res => {
+          if (res.ok) {
+            setVideoSource(hlsUrl);
+            setVideoType('application/x-mpegURL');
+          } else {
+            // Fallback to original MP4 if HLS is not available
+            setVideoSource(mediaUrl);
+            setVideoType('video/mp4');
+          }
+        })
+        .catch(error => {
+          console.error('Error checking HLS source, falling back to MP4:', error);
+          setVideoSource(mediaUrl);
+          setVideoType('video/mp4');
+        });
     }
   }, [mediaUrl, mediaType]);
 
-  /**
-   * Callback to toggle video play/pause. This is memoized to avoid re-creation.
-   */
+  // Callback to toggle video play/pause
   const togglePlay = useCallback(() => {
     const player = playerRef.current;
     if (!player) return;
@@ -155,9 +173,9 @@ export default function PostCard({
     }
 
     if (player.paused()) {
-      // Use the promise returned by play() to handle success/failure
       player.play().then(() => {
         player.muted(false); // Unmute when playing
+        player.poster(''); // Hide poster after play starts
         setShowPlayOverlay(false);
         currentPlayingPlayerInfo = { player, setShowOverlay: setShowPlayOverlay };
       }).catch(err => {
@@ -175,54 +193,98 @@ export default function PostCard({
   // Effect to initialize and manage video.js player
   useEffect(() => {
     if (mediaType === 'video' && videoRef.current && videoSource) {
-      // Ensure player is not already initialized before creating a new one
-      if (playerRef.current) {
-        playerRef.current.dispose();
-      }
+      if (!playerRef.current) {
+        // Initialize video.js player
+        playerRef.current = videojs(videoRef.current, {
+          controls: false, // Custom controls via overlay
+          autoplay: false,
+          preload: 'auto',
+          responsive: true,
+          fluid: true,
+          loop: true,
+          muted: true, // Start muted to allow autoplay without user interaction
+          poster: posterUrl,
+        });
 
-      // Check if the video element is available in the DOM
-      const videoElement = videoRef.current;
-      if (!videoElement) {
-        console.error("Video element not found for video.js initialization.");
-        return;
-      }
+        const player = playerRef.current;
+        const videoElement = player.el().querySelector('video');
 
-      const player = playerRef.current = videojs(videoElement, {
-        controls: false,
-        autoplay: false,
-        preload: 'auto',
-        responsive: true,
-        fluid: true,
-        loop: true,
-        muted: true,
-        poster: posterUrl,
-      });
+        // NEW: Event handlers for more deliberate touch detection on mobile
+        const handleTouchStart = (e) => {
+            // Store the initial touch position
+            touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        };
 
-      // Add event listeners to the player
-      player.on('play', () => setShowPlayOverlay(false));
-      player.on('pause', () => setShowPlayOverlay(true));
+        const handleTouchEnd = (e) => {
+            // Get the final touch position
+            const endX = e.changedTouches[0].clientX;
+            const endY = e.changedTouches[0].clientY;
+            // Calculate the distance moved
+            const dx = Math.abs(endX - touchStartPos.current.x);
+            const dy = Math.abs(endY - touchStartPos.current.y);
 
-      // Cleanup function to dispose of the player
-      return () => {
-        if (playerRef.current) {
-          playerRef.current.dispose();
-          playerRef.current = null;
-          // Reset the global playing player reference if this player was the one playing
-          if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === player) {
-            currentPlayingPlayerInfo = null;
-          }
+            // Define a small threshold to distinguish a tap from a scroll
+            const touchThreshold = 10; // in pixels
+
+            if (dx < touchThreshold && dy < touchThreshold) {
+                // If the movement was minimal, treat it as a deliberate tap
+                e.preventDefault();
+                e.stopPropagation();
+                togglePlay();
+            }
+        };
+
+        // Add event listeners to the video element
+        if (videoElement) {
+          // Add touch event listeners to the video element itself
+          videoElement.addEventListener('touchstart', handleTouchStart);
+          videoElement.addEventListener('touchend', handleTouchEnd);
+          // Keep the click listener for desktop users
+          videoElement.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            togglePlay();
+          });
         }
-      };
+
+        // Update overlay state based on player events
+        player.on('play', () => setShowPlayOverlay(false));
+        player.on('pause', () => setShowPlayOverlay(true));
+        setShowPlayOverlay(true); // Ensure overlay is shown initially
+      } else {
+        // Update video source if it changes
+        if (playerRef.current.currentSrc() !== videoSource) {
+          playerRef.current.src({ src: videoSource, type: videoType });
+          playerRef.current.poster(posterUrl);
+          setShowPlayOverlay(true); // Show overlay when source changes
+        }
+      }
     }
-    // Cleanup function for when the component unmounts or dependencies change
+
+    // Cleanup function for video.js player and event listeners
     return () => {
       if (playerRef.current) {
-        playerRef.current.dispose();
+        const player = playerRef.current;
+        const videoElement = player.el().querySelector('video');
+        if (videoElement) {
+            // Remove event listeners
+            videoElement.removeEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                togglePlay();
+            });
+            videoElement.removeEventListener('touchstart', () => {});
+            videoElement.removeEventListener('touchend', () => {});
+        }
+        playerRef.current.dispose(); // Dispose of the video.js player
         playerRef.current = null;
       }
+      // Clear global reference if this player was the one currently playing
+      if (currentPlayingPlayerInfo && currentPlayingPlayerInfo.player === playerRef.current) {
+        currentPlayingPlayerInfo = null;
+      }
     };
-  }, [mediaType, videoSource, posterUrl]);
-
+  }, [videoSource, videoType, mediaType, posterUrl, togglePlay]);
 
   // Effect to handle Twitter widget loading and rendering
   useEffect(() => {
@@ -271,7 +333,7 @@ export default function PostCard({
     }
   }, [embed, postId]);
 
-  // Effect to handle Instagram widget loading and rendering
+  // NEW: Effect to handle Instagram widget loading and rendering
   useEffect(() => {
     if (embed?.type === 'instagram') {
       const loadInstagramWidgets = () => {
@@ -641,22 +703,22 @@ export default function PostCard({
       {mediaUrl && (
         <div className="mt-4 rounded-lg overflow-hidden relative">
           {mediaType === 'video' && videoSource ? (
-            <div className="video-js-container w-full relative pb-[56.25%] overflow-hidden">
+            <div data-vjs-player className="relative">
               <video
                 ref={videoRef}
-                className="video-js vjs-default-skin w-full h-full absolute inset-0 object-cover"
+                className="video-js rounded-lg max-h-[500px] w-full"
                 playsInline
               >
                 <source src={videoSource} type={videoType} />
-                <p className="vjs-no-js">
-                  To view this video please enable JavaScript, and consider upgrading to a
-                  web browser that <a href="https://videojs.com/html5-video-support/" target="_blank" rel="noopener noreferrer">supports HTML5 video</a>
-                </p>
               </video>
               {showPlayOverlay && (
                 <div
-                  onClick={togglePlay}
                   className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black bg-opacity-20 z-10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    togglePlay();
+                  }}
                 >
                   <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-label="Play video"><polygon points="32,24 64,42 32,60" /></svg>
                 </div>
