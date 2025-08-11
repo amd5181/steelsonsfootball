@@ -98,7 +98,7 @@ export default function PostCard({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [adminDropdownRef]);
+  }, []);
 
   // Effect to fetch initial post data and set up real-time listener
   useEffect(() => {
@@ -244,13 +244,15 @@ export default function PostCard({
         };
 
         if (videoElement) {
-          videoElement.addEventListener('touchstart', handleTouchStart);
-          videoElement.addEventListener('touchend', handleTouchEnd);
-          videoElement.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            togglePlay();
-          });
+          // Clean up any old listeners before adding new ones
+          // The cleanup function handles removal, but this is a defensive measure.
+          videoElement.removeEventListener('click', togglePlay);
+          videoElement.removeEventListener('touchstart', handleTouchStart);
+          videoElement.removeEventListener('touchend', handleTouchEnd);
+          
+          videoElement.addEventListener('touchstart', handleTouchStart, { passive: true });
+          videoElement.addEventListener('touchend', handleTouchEnd, { passive: false });
+          videoElement.addEventListener('click', togglePlay, { passive: false });
         }
 
         player.on('play', () => setShowPlayOverlay(false));
@@ -270,9 +272,10 @@ export default function PostCard({
         const player = playerRef.current;
         const videoElement = player.el().querySelector('video');
         if (videoElement) {
-          videoElement.removeEventListener('click', () => {});
-          videoElement.removeEventListener('touchstart', () => {});
-          videoElement.removeEventListener('touchend', () => {});
+          // Ensure all event listeners are properly removed on cleanup
+          videoElement.removeEventListener('click', togglePlay);
+          videoElement.removeEventListener('touchstart', handleTouchStart);
+          videoElement.removeEventListener('touchend', handleTouchEnd);
         }
         playerRef.current.dispose();
         playerRef.current = null;
@@ -321,60 +324,62 @@ export default function PostCard({
     }
   }, [embed, postId]);
 
-  // START of the updated Instagram useEffect block
+  // Updated Instagram useEffect hook for better mobile video handling
   useEffect(() => {
     if (embed?.type !== 'instagram') return;
 
-    // This function will ensure the embed.js script is loaded
-    const ensureIgScript = () =>
-      new Promise((resolve, reject) => {
-        if (window.instgrm?.Embeds) {
-          resolve();
-          return;
-        }
-        const existing = document.getElementById('ig-embed-script');
-        if (existing) {
-          const check = () => (window.instgrm?.Embeds ? resolve() : setTimeout(check, 50));
-          check();
-          return;
-        }
-        const s = document.createElement('script');
-        s.id = 'ig-embed-script';
-        s.src = 'https://www.instagram.com/embed.js';
-        s.async = true;
-        s.onload = () => resolve();
-        s.onerror = (e) => reject(e);
-        document.body.appendChild(s);
-      });
+    // Helper function to ensure the Instagram embed script is loaded
+    const ensureIgScript = () => new Promise((resolve, reject) => {
+      if (window.instgrm?.Embeds) {
+        resolve();
+        return;
+      }
+      const existing = document.getElementById('ig-embed-script');
+      if (existing) {
+        const check = () => (window.instgrm?.Embeds ? resolve() : setTimeout(check, 50));
+        check();
+        return;
+      }
+      const s = document.createElement('script');
+      s.id = 'ig-embed-script';
+      s.src = 'https://www.instagram.com/embed.js';
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = (e) => reject(e);
+      document.body.appendChild(s);
+    });
 
+    // Function to apply a robust set of permissions to the iframe
     const applyIframePermissions = (iframe) => {
       if (!iframe) return;
-      const allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write; playsinline';
+      // This set of permissions is crucial for mobile video playback and touch handling
+      const allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen; playsinline';
       iframe.setAttribute('allow', allow);
       iframe.setAttribute('allowfullscreen', 'true');
       iframe.setAttribute('loading', 'lazy');
       iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
     };
 
-    // The main processing function
     const processOne = async () => {
       try {
         await ensureIgScript();
         const el = instagramRef.current;
         if (!el) {
+          // If the ref is not available, the embed failed.
           setInstagramEmbedFailed(true);
           return;
         }
 
-        // Use a MutationObserver to wait for the iframe to be added
+        // Use a MutationObserver to wait for the iframe to be added by Instagram's script.
         const observer = new MutationObserver((mutations) => {
           for (const mutation of mutations) {
             if (mutation.type === 'childList') {
               const ifr = el.querySelector('iframe[src*="instagram.com"]');
               if (ifr) {
+                // Once the iframe is found, apply our permissions and disconnect the observer.
                 applyIframePermissions(ifr);
                 setInstagramEmbedFailed(false);
-                observer.disconnect(); // Stop observing once we have the iframe
+                observer.disconnect();
                 return;
               }
             }
@@ -382,10 +387,12 @@ export default function PostCard({
         });
         observer.observe(el, { childList: true, subtree: true });
 
-        // Process the blockquote with Instagram's script
+        // Process the blockquote with Instagram's script.
+        // This is the call that inserts the iframe.
         if (window.instgrm?.Embeds?.process) {
           window.instgrm.Embeds.process(el);
         } else {
+          // If the processing function is not available, fail.
           setInstagramEmbedFailed(true);
           observer.disconnect();
         }
@@ -396,13 +403,9 @@ export default function PostCard({
     };
 
     processOne();
-    // Cleanup function for the effect
-    return () => {
-      // The MutationObserver is already disconnected inside the callback
-      // if it finds the iframe, so no explicit cleanup is needed here.
-    };
+    // The observer is disconnected within the processOne function, so no need for
+    // an explicit cleanup here. This avoids re-renders causing multiple observers.
   }, [embed?.type, embed?.url, postId]);
-  // END of the updated Instagram useEffect block
 
   /**
    * Handles user reaction to the post.
@@ -517,7 +520,7 @@ export default function PostCard({
             className="w-full aspect-video rounded-lg"
             src={url}
             frameBorder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; playsinline"
             allowFullScreen
             title="YouTube video"
           />
@@ -532,7 +535,7 @@ export default function PostCard({
             className="w-full aspect-video rounded-lg"
             src={url}
             frameBorder="0"
-            allow="autoplay; fullscreen; picture-in-picture"
+            allow="autoplay; fullscreen; picture-in-picture; playsinline"
             allowFullScreen
             title="Vimeo video"
           />
@@ -590,7 +593,7 @@ export default function PostCard({
               src={iframeSrc}
               className="w-full rounded-lg aspect-square"
               style={{ border: 0, overflow: 'hidden' }}
-              allow="autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write; playsinline"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen; playsinline"
               allowFullScreen
               loading="lazy"
               referrerPolicy="strict-origin-when-cross-origin"
@@ -868,3 +871,13 @@ export default function PostCard({
     </div>
   );
 }
+PostCard.propTypes = {
+  name: PropTypes.string.isRequired,
+  text: PropTypes.string.isRequired,
+  createdAt: PropTypes.number.isRequired,
+  mediaUrl: PropTypes.string,
+  mediaType: PropTypes.string,
+  postId: PropTypes.string.isRequired,
+  access: PropTypes.string.isRequired,
+  onUpdate: PropTypes.func,
+};
