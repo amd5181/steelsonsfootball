@@ -23,7 +23,7 @@ export default function PinGate({ onUnlock }) {
         JSON.stringify({ access: 'user', timestamp: Date.now() })
       );
       onUnlock('user');
-    } else if (pin === '2022') {
+    } else if (pin === '2011') {
       localStorage.setItem(
         'steelsons-session',
         JSON.stringify({ access: 'admin', timestamp: Date.now() })
