@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "rootDirectory": "steel-sons-site",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
