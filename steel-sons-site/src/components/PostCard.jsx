@@ -10,7 +10,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { parseEmbedUrl } from '../utils/embedParser';
-
+import PropTypes from 'prop-types';
 
 // Global variable to track the currently playing video.
 let currentPlayingPlayerInfo = null;
