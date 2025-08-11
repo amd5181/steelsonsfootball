@@ -6,16 +6,13 @@ import {
   updateDoc,
   deleteDoc,
   increment,
-  onSnapshot, // Import onSnapshot for real-time updates
+  onSnapshot,
 } from 'firebase/firestore';
-// Assuming db is initialized elsewhere, e.g., in a separate firebase.js
-// import { initializeApp } from 'firebase/app'; // Not needed here as db is imported
-import { db } from '../lib/firebase'; // Assuming db is initialized elsewhere
+import { db } from '../lib/firebase';
 import { parseEmbedUrl } from '../utils/embedParser';
 
 
 // Global variable to track the currently playing video.
-// For a more robust solution in a larger app, consider using React Context API.
 let currentPlayingPlayerInfo = null;
 
 // Initial emoji set for reactions
@@ -74,10 +71,10 @@ export default function PostCard({
   const [reactions, setReactions] = useState(EMOJI_SET);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); // State for custom delete confirmation
-  const [isLoading, setIsLoading] = useState(true); // Loading state for post data
-  const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false); // State to track Twitter embed failure
-  const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false); // State to track Instagram embed failure
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [twitterEmbedFailed, setTwitterEmbedFailed] = useState(false);
+  const [instagramEmbedFailed, setInstagramEmbedFailed] = useState(false);
   const [showAdminDropdown, setShowAdminDropdown] = useState(false);
   const adminDropdownRef = useRef(null);
 
@@ -120,16 +117,15 @@ export default function PostCard({
               notes: data.notes || '',
             });
           } else {
-            setTradeData(null); // Clear trade data if post type changes
+            setTradeData(null);
           }
 
           if (data.type === 'poll') {
             setPollData(data.poll);
-            // Check localStorage for vote status. Note: localStorage is client-side only.
             const voted = localStorage.getItem(`voted-${postId}`);
             setHasVoted(!!voted);
           } else {
-            setPollData(null); // Clear poll data if post type changes
+            setPollData(null);
           }
 
           const fromFirestore = data.reactions || {};
@@ -325,15 +321,17 @@ export default function PostCard({
     }
   }, [embed, postId]);
 
-  // Instagram widget loading and *scoped* processing with iframe fallback + permissive allow attrs
+  // START of the updated Instagram useEffect block
   useEffect(() => {
     if (embed?.type !== 'instagram') return;
 
-    let cancelled = false;
-
+    // This function will ensure the embed.js script is loaded
     const ensureIgScript = () =>
       new Promise((resolve, reject) => {
-        if (window.instgrm?.Embeds) return resolve();
+        if (window.instgrm?.Embeds) {
+          resolve();
+          return;
+        }
         const existing = document.getElementById('ig-embed-script');
         if (existing) {
           const check = () => (window.instgrm?.Embeds ? resolve() : setTimeout(check, 50));
@@ -349,59 +347,62 @@ export default function PostCard({
         document.body.appendChild(s);
       });
 
-    const applyIframePermissions = () => {
-      try {
-        const container = instagramRef.current?.parentElement;
-        if (!container) return;
-        const ifr = container.querySelector('iframe[src*="instagram.com"]');
-        if (ifr) {
-          const allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write';
-          ifr.setAttribute('allow', allow);
-          ifr.setAttribute('allowfullscreen', 'true');
-          ifr.setAttribute('loading', 'lazy');
-          ifr.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
-        }
-      } catch {}
+    const applyIframePermissions = (iframe) => {
+      if (!iframe) return;
+      const allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write; playsinline';
+      iframe.setAttribute('allow', allow);
+      iframe.setAttribute('allowfullscreen', 'true');
+      iframe.setAttribute('loading', 'lazy');
+      iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
     };
 
+    // The main processing function
     const processOne = async () => {
       try {
         await ensureIgScript();
-        if (!cancelled && window.instgrm?.Embeds) {
-          setTimeout(() => {
-            try {
-              const el = instagramRef.current;
-              if (el) {
-                if (window.instgrm.Embeds.process) {
-                  try {
-                    window.instgrm.Embeds.process(el);
-                  } catch {
-                    window.instgrm.Embeds.process();
-                  }
-                }
-                // Apply permissions after IG swaps the blockquote to an iframe
-                setTimeout(applyIframePermissions, 250);
+        const el = instagramRef.current;
+        if (!el) {
+          setInstagramEmbedFailed(true);
+          return;
+        }
+
+        // Use a MutationObserver to wait for the iframe to be added
+        const observer = new MutationObserver((mutations) => {
+          for (const mutation of mutations) {
+            if (mutation.type === 'childList') {
+              const ifr = el.querySelector('iframe[src*="instagram.com"]');
+              if (ifr) {
+                applyIframePermissions(ifr);
                 setInstagramEmbedFailed(false);
-              } else {
-                setInstagramEmbedFailed(true);
+                observer.disconnect(); // Stop observing once we have the iframe
+                return;
               }
-            } catch (err) {
-              console.error('IG process error', err);
-              setInstagramEmbedFailed(true);
             }
-          }, 60);
+          }
+        });
+        observer.observe(el, { childList: true, subtree: true });
+
+        // Process the blockquote with Instagram's script
+        if (window.instgrm?.Embeds?.process) {
+          window.instgrm.Embeds.process(el);
+        } else {
+          setInstagramEmbedFailed(true);
+          observer.disconnect();
         }
       } catch (e) {
-        console.error('IG embed.js load error', e);
+        console.error('IG embed processing error:', e);
         setInstagramEmbedFailed(true);
       }
     };
 
     processOne();
+    // Cleanup function for the effect
     return () => {
-      cancelled = true;
+      // The MutationObserver is already disconnected inside the callback
+      // if it finds the iframe, so no explicit cleanup is needed here.
     };
   }, [embed?.type, embed?.url, postId]);
+  // END of the updated Instagram useEffect block
 
   /**
    * Handles user reaction to the post.
@@ -589,7 +590,7 @@ export default function PostCard({
               src={iframeSrc}
               className="w-full rounded-lg aspect-square"
               style={{ border: 0, overflow: 'hidden' }}
-              allow="autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write"
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write; playsinline"
               allowFullScreen
               loading="lazy"
               referrerPolicy="strict-origin-when-cross-origin"
