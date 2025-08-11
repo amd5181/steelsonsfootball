@@ -84,6 +84,9 @@ export default function PostCard({
   // instagram blockquote ref for scoped processing
   const instagramRef = useRef(null);
 
+  // iOS detection for mobile fallback
+  const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
   // State to track touch start position for distinguishing taps from scrolls
   const touchStartPos = useRef({ x: 0, y: 0 });
 
@@ -583,7 +586,7 @@ export default function PostCard({
       // Scoped processing via embed.js; if it fails, iframe fallback with permissive attributes
       const iframeSrc = `${url.endsWith('/') ? url : url + '/'}embed/`;
       return (
-        <div className="mt-4">
+        <div className="mt-4 relative">
           {instagramEmbedFailed ? (
             <iframe
               src={iframeSrc}
@@ -606,185 +609,24 @@ export default function PostCard({
               <a href={url} target="_blank" rel="noopener noreferrer"></a>
             </blockquote>
           )}
-        </div>
-      );
-    }
 
-    if (type === 'image') {
-      return (
-        <div className="mt-4">
-          <img src={url} alt="Embedded content" className="w-full rounded-lg object-cover" />
-        </div>
-      );
-    }
-
-    if (type === 'video') {
-      return (
-        <div className="mt-4">
-          <video src={url} controls className="w-full rounded-lg max-h-[700px]" playsInline />
-        </div>
-      );
-    }
-
-    return (
-      <div className="mt-4">
-        <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">
-          View Embedded Link
-        </a>
-      </div>
-    );
-  };
-
-  if (isLoading) {
-    return (
-      <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6 mb-6 border-l-8 border-rose-400 relative animate-pulse">
-        <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-        <div className="h-6 bg-gray-300 rounded w-3/4 mb-4"></div>
-        <div className="h-48 bg-gray-200 rounded-lg"></div>
-        <div className="flex items-center gap-3 mt-4">
-          <div className="h-8 w-16 bg-gray-200 rounded-full"></div>
-          <div className="h-8 w-16 bg-gray-200 rounded-full"></div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6 mb-6 border-l-8 border-rose-400 relative font-sans">
-      {/* Custom Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl text-center">
-            <p className="text-lg font-semibold mb-4">Are you sure you want to delete this post?</p>
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={confirmDeletePost}
-                className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition"
-              >
-                Delete
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="flex justify-between items-start mb-2">
-        <div className="text-sm uppercase font-bold tracking-wide text-rose-500">{name}</div>
-
-        <div className="flex items-center gap-2">
-          {createdAt && <div className="text-xs text-gray-400 whitespace-nowrap">{formatDate(createdAt)}</div>}
-
-          {canDelete && (
+          {/* iOS fallback: overlay button to open in Instagram if playback is stubborn */}
+          {isIOS && (
             <button
-              onClick={handleDeletePost}
-              className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-              title="Delete post"
+              type="button"
+              className="absolute bottom-2 right-2 z-10 bg-black/60 text-white text-xs px-2 py-1 rounded-md"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                window.open(url, '_blank', 'noopener,noreferrer');
+              }}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 6h18"></path>
-                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                <line x1="10" x2="10" y1="11" y2="17"></line>
-                <line x1="14" x2="14" y1="11" y2="17"></line>
-              </svg>
+              Open in Instagram
             </button>
           )}
-
-          {access === 'admin' && (
-            <div className="relative" ref={adminDropdownRef}>
-              <button
-                onClick={() => setShowAdminDropdown(!showAdminDropdown)}
-                className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                title="Admin actions"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="1"></circle>
-                  <circle cx="19" cy="12" r="1"></circle>
-                  <circle cx="5" cy="12" r="1"></circle>
-                </svg>
-              </button>
-              {showAdminDropdown && (
-                <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
-                  <div className="py-1">
-                    <button onClick={handleResetReactions} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                      Clear Reactions
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
-      </div>
-
-      <p className="text-gray-800 text-lg leading-relaxed whitespace-pre-line mt-2">{text}</p>
-
-      {mediaUrl && (
-        <div className="mt-4 rounded-lg overflow-hidden relative">
-          {mediaType === 'video' && videoSource ? (
-            <div className={`relative w-full transition-[max-height] duration-300 ease-out ${showPlayOverlay ? 'max-h-[85svh]' : 'max-h-[85svh]'} md:max-h-[700px]`}>
-              <div className={`relative w-full transition-[height] duration-300 ease-out ${showPlayOverlay ? 'h-[52svh]' : 'h-[88svh]'} md:h-[700px]`}>
-                <div data-vjs-player className="absolute inset-0">
-                  <video ref={videoRef} className="video-js vjs-fill rounded-lg" style={{ objectFit: 'contain' }} playsInline>
-                    <source src={videoSource} type={videoType} />
-                  </video>
-                </div>
-                {showPlayOverlay && (
-                  <button
-                    type="button"
-                    className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/20 z-10"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      togglePlay();
-                    }}
-                    aria-label="Play video"
-                  >
-                    <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 84 84" aria-hidden="true">
-                      <polygon points="32,24 64,42 32,60" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : (
-            mediaType === 'image' && <img src={mediaUrl} alt="uploaded media" className="w-full rounded-lg object-cover" />
-          )}
-        </div>
-      )}
-
-      {renderEmbed()}
-
-      {postType === 'trade' && tradeData && (
-        <div className="mt-4 border rounded-lg p-4 bg-yellow-50">
-          <h4 className="text-sm font-bold text-yellow-700 uppercase mb-2">Trade Block</h4>
-          {tradeData.giving && <p className="text-sm"><strong>Giving:</strong> {tradeData.giving}</p>}
-          {tradeData.seeking && <p className="text-sm"><strong>Seeking:</strong> {tradeData.seeking}</p>}
-          {tradeData.notes && <p className="text-sm"><strong>Notes:</strong> {tradeData.notes}</p>}
-        </div>
-      )}
-
-      {postType === 'poll' && pollData && (
-        <div className="mt-4 border rounded-lg p-4 bg-blue-50">
-          <h4 className="text-sm font-bold text-blue-700 uppercase mb-2">Poll</h4>
-          <p className="text-sm font-semibold text-gray-800 mb-2">{pollData.question}</p>
-
-          {!hasVoted ? (
-            <ul className="space-y-2">
-              {pollData.options.map((opt, idx) => (
-                <li key={idx}>
-                  <button
-                    onClick={async () => {
-                      const updatedOptions = [...pollData.options];
-                      updatedOptions[idx].votes = [...(updatedOptions[idx].votes || []), Date.now()];
-                      try {
-                        await updateDoc(postRef, { [`poll.options`]: updatedOptions });
+      );
+    }
                         localStorage.setItem(`voted-${postId}`, '1');
                         setHasVoted(true);
                         setPollData((prev) => ({ ...prev, options: updatedOptions }));
