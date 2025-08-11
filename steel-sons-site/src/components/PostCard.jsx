@@ -81,6 +81,8 @@ export default function PostCard({
   const [showAdminDropdown, setShowAdminDropdown] = useState(false);
   const adminDropdownRef = useRef(null);
 
+  // NEW: instagram blockquote ref for scoped processing
+  const instagramRef = useRef(null);
 
   // NEW: State to track touch start position for distinguishing taps from scrolls
   const touchStartPos = useRef({ x: 0, y: 0 });
@@ -354,51 +356,63 @@ export default function PostCard({
     }
   }, [embed, postId]);
 
-  // NEW: Effect to handle Instagram widget loading and rendering
+  // UPDATED: Instagram widget loading and *scoped* processing with iframe fallback
   useEffect(() => {
-    if (embed?.type === 'instagram') {
-      const loadInstagramWidgets = () => {
-        // Instagram's script uses window.instgrm.Embeds.process()
-        if (window.instgrm && window.instgrm.Embeds) {
-          // A small delay to ensure the blockquote is in the DOM before processing
+    if (embed?.type !== 'instagram') return;
+
+    let cancelled = false;
+
+    const ensureIgScript = () =>
+      new Promise((resolve, reject) => {
+        if (window.instgrm?.Embeds) return resolve();
+        const existing = document.getElementById('ig-embed-script');
+        if (existing) {
+          const check = () => (window.instgrm?.Embeds ? resolve() : setTimeout(check, 50));
+          check();
+          return;
+        }
+        const s = document.createElement('script');
+        s.id = 'ig-embed-script';
+        s.src = 'https://www.instagram.com/embed.js';
+        s.async = true;
+        s.onload = () => resolve();
+        s.onerror = (e) => reject(e);
+        document.body.appendChild(s);
+      });
+
+    const processOne = async () => {
+      try {
+        await ensureIgScript();
+        if (!cancelled && window.instgrm?.Embeds) {
+          // Delay to ensure blockquote is mounted
           setTimeout(() => {
             try {
-              window.instgrm.Embeds.process();
-              console.log("Instagram widget processed successfully for postId:", postId);
-              setInstagramEmbedFailed(false);
+              const el = instagramRef.current;
+              if (el) {
+                if (window.instgrm.Embeds.process) {
+                  // Try scoped processing if supported; otherwise fall back to global
+                  try { window.instgrm.Embeds.process(el); }
+                  catch { window.instgrm.Embeds.process(); }
+                }
+                setInstagramEmbedFailed(false);
+              } else {
+                setInstagramEmbedFailed(true);
+              }
             } catch (err) {
-              console.error("Error processing Instagram widget for postId:", postId, err);
+              console.error('Error processing Instagram embed', err);
               setInstagramEmbedFailed(true);
             }
-          }, 100);
-        } else {
-          console.warn("Instagram Embed - window.instgrm or window.instgrm.Embeds not available.");
-          setInstagramEmbedFailed(true);
+          }, 50);
         }
-      };
-
-      // Check if instgrm object exists, if not, load the script
-      if (typeof window.instgrm === 'undefined') {
-        console.log("Instagram Embed - Loading embed.js script...");
-        const script = document.createElement('script');
-        script.setAttribute('src', 'https://www.instagram.com/embed.js');
-        script.setAttribute('async', '');
-        script.setAttribute('charset', 'utf-8');
-        document.body.appendChild(script);
-        script.onload = () => {
-          console.log("Instagram Embed - embed.js script loaded.");
-          loadInstagramWidgets(); // Process widgets once script is loaded
-        };
-        script.onerror = (e) => {
-          console.error("Instagram Embed - Failed to load embed.js script:", e);
-          setInstagramEmbedFailed(true);
-        };
-      } else {
-        console.log("Instagram Embed - embed.js script already loaded, attempting to process widgets.");
-        loadInstagramWidgets();
+      } catch (e) {
+        console.error('Instagram embed.js load error', e);
+        setInstagramEmbedFailed(true);
       }
-    }
-  }, [embed, postId]); // Depend on embed and postId to re-run when they change
+    };
+
+    processOne();
+    return () => { cancelled = true; };
+  }, [embed?.type, embed?.url, postId]);
 
 
   /**
@@ -609,26 +623,28 @@ export default function PostCard({
     }
 
     if (type === 'instagram') {
-      // Instagram embeds are handled by the instgrm.Embeds.process() script
+      // UPDATED: scoped processing with ref + hard iframe fallback
       console.log("renderEmbed - Rendering Instagram blockquote with URL:", url);
+      const iframeSrc = `${url.endsWith('/') ? url : url + '/'}embed/`;
       return (
         <div className="mt-4">
           {instagramEmbedFailed ? (
-            <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
-              <p className="font-semibold mb-2">Could not load Instagram post.</p>
-              <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                Click here to view the post on Instagram
-              </a>
-            </div>
+            <iframe
+              src={iframeSrc}
+              className="w-full rounded-lg"
+              style={{ border: 0, overflow: 'hidden' }}
+              allowTransparency
+              scrolling="no"
+              frameBorder="0"
+              title="Instagram post"
+            />
           ) : (
-            // Instagram's embed script expects a blockquote with specific attributes
             <blockquote
+              ref={instagramRef}
               className="instagram-media"
               data-instgrm-permalink={url}
-              data-instgrm-version="14"
               style={{ width: '100%', margin: '0 auto' }}
             >
-              {/* The content inside the blockquote is usually just a link to the post */}
               <a href={url} target="_blank" rel="noopener noreferrer"></a>
             </blockquote>
           )}
