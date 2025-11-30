@@ -1,7 +1,7 @@
 {
-  "buildCommand": "npm --prefix steel-sons-site install && npm --prefix steel-sons-site run build",
-  "outputDirectory": "steel-sons-site/dist",
-  "routes": [
-    { "src": "/(.*)", "dest": "/" }
-  ]
+  "framework": null,
+  "buildCommand": "cd steel-sons-site && npm run build",
+  "devCommand": "cd steel-sons-site && npm run dev",
+  "installCommand": "cd steel-sons-site && npm install",
+  "outputDirectory": "steel-sons-site/dist"
 }
