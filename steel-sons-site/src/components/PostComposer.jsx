@@ -68,9 +68,15 @@ export default function PostComposer({ onPost }) {
     });
 
     const data = await res.json();
+    let mediaType = 'image';
+    if (data.resource_type === 'video') {
+      mediaType = 'video';
+    } else if (data.resource_type === 'raw' && file.type.startsWith('audio/')) {
+      mediaType = 'audio';
+    }
     return {
       url: data.secure_url,
-      type: data.resource_type === 'video' ? 'video' : 'image',
+      type: mediaType,
     };
   };
 
@@ -96,6 +102,15 @@ export default function PostComposer({ onPost }) {
       if (!text.trim() && !file && !embedUrl.trim()) {
         setError('Post must include text, media, or an embed');
         return;
+      }
+
+      // Validate file size (10MB limit for audio)
+      if (file && file.type.startsWith('audio/')) {
+        const maxSize = 10 * 1024 * 1024; // 10MB
+        if (file.size > maxSize) {
+          setError('Audio file must be smaller than 10MB');
+          return;
+        }
       }
 
       setUploading(true);
@@ -234,25 +249,72 @@ export default function PostComposer({ onPost }) {
           />
 
           {file && (
-            <div className="relative w-32 h-32 mt-2">
-              <img
-                src={URL.createObjectURL(file)}
-                alt="Preview"
-                className="w-full h-full object-cover rounded border"
-              />
-              <button
-                type="button"
-                onClick={() => setFile(null)}
-                className="absolute -top-2 -right-2 bg-white text-red-600 border border-gray-300 rounded-full text-xs px-2 py-1 shadow-sm"
-              >
-                ✕
-              </button>
+            <div className="relative mt-2">
+              {file.type.startsWith('image/') && (
+                <div className="relative w-32 h-32">
+                  <img
+                    src={URL.createObjectURL(file)}
+                    alt="Preview"
+                    className="w-full h-full object-cover rounded border"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFile(null)}
+                    className="absolute -top-2 -right-2 bg-white text-red-600 border border-gray-300 rounded-full text-xs px-2 py-1 shadow-sm"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              {file.type.startsWith('video/') && (
+                <div className="relative w-64">
+                  <video
+                    src={URL.createObjectURL(file)}
+                    className="w-full rounded border"
+                    controls
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFile(null)}
+                    className="absolute -top-2 -right-2 bg-white text-red-600 border border-gray-300 rounded-full text-xs px-2 py-1 shadow-sm"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              {file.type.startsWith('audio/') && (
+                <div className="relative bg-gray-50 border border-gray-300 rounded p-3 max-w-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0">
+                      <svg className="w-8 h-8 text-rose-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.37 4.37 0 0015 12c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                      <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFile(null)}
+                      className="flex-shrink-0 bg-white text-red-600 border border-gray-300 rounded-full text-xs px-2 py-1 shadow-sm hover:bg-red-50"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <audio
+                    src={URL.createObjectURL(file)}
+                    controls
+                    className="w-full mt-2"
+                  />
+                </div>
+              )}
             </div>
           )}
 
           <input
             type="file"
-            accept="image/*,video/*"
+            accept="image/*,video/*,audio/mpeg,audio/wav,audio/aac,audio/x-m4a"
             onChange={(e) => setFile(e.target.files?.[0])}
             className="text-sm"
           />

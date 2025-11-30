@@ -753,6 +753,29 @@ export default function PostCard({
                 )}
               </div>
             </div>
+          ) : mediaType === 'audio' ? (
+            <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-lg p-4 border border-rose-200">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex-shrink-0">
+                  <svg className="w-10 h-10 text-rose-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.37 4.37 0 0015 12c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-700">Audio</p>
+                </div>
+              </div>
+              <audio
+                src={mediaUrl}
+                controls
+                controlsList="nodownload"
+                className="w-full"
+                style={{
+                  height: '40px',
+                  borderRadius: '8px'
+                }}
+              />
+            </div>
           ) : (
             mediaType === 'image' && <img src={mediaUrl} alt="uploaded media" className="w-full rounded-lg object-cover" />
           )}
