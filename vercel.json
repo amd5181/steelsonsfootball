@@ -1,7 +1,8 @@
 {
-  "framework": null,
-  "buildCommand": "cd steel-sons-site && npm run build",
-  "devCommand": "cd steel-sons-site && npm run dev",
-  "installCommand": "cd steel-sons-site && npm install",
-  "outputDirectory": "steel-sons-site/dist"
+  "builds": [
+    { "src": "package.json", "use": "@vercel/static-build" }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "/" }
+  ]
 }

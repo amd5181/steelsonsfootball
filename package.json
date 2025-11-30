@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "build": "cd steel-sons-site && npm install && npm run build",
+    "vercel-build": "cd steel-sons-site && npm install && npm run build && mv steel-sons-site/dist dist"
+  },
   "dependencies": {
     "react": "18.3.1",
     "react-dom": "18.3.1",
