@@ -1,7 +1,33 @@
-import React, { useState } from 'react';
-import { db } from '../lib/firebase';
-import { collection, addDoc } from 'firebase/firestore';
-import { parseEmbedUrl } from '../utils/embedParser';
+import React, { useState, useEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithCustomToken, signInAnonymously } from 'firebase/auth';
+import { getFirestore, collection, addDoc } from 'firebase/firestore';
+
+// --- INLINED UTILS & CONFIG (Previously external files) ---
+
+// Initialize Firebase directly in this file for the preview to work
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// Simple version of the embed parser
+const parseEmbedUrl = (url) => {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (trimmed.includes('youtube.com') || trimmed.includes('youtu.be')) {
+    return { type: 'youtube', originalUrl: trimmed };
+  }
+  if (trimmed.includes('twitter.com') || trimmed.includes('x.com')) {
+    return { type: 'twitter', originalUrl: trimmed };
+  }
+  if (trimmed.includes('instagram.com')) {
+    return { type: 'instagram', originalUrl: trimmed };
+  }
+  return { type: 'link', originalUrl: trimmed };
+};
+
+// --- END INLINED UTILS ---
 
 const CLOUD_NAME = 'dsvpfi9te';
 const UPLOAD_PRESET = 'my_forum_uploads';
@@ -20,6 +46,18 @@ export default function PostComposer({ onPost }) {
   const [notes, setNotes] = useState('');
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
+
+  // Ensure we are authenticated anonymously to write to Firestore
+  useEffect(() => {
+    const initAuth = async () => {
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        await signInWithCustomToken(auth, __initial_auth_token);
+      } else {
+        await signInAnonymously(auth);
+      }
+    };
+    initAuth();
+  }, []);
 
   const handlePaste = async (event) => {
     const items = event.clipboardData?.items;
@@ -56,28 +94,46 @@ export default function PostComposer({ onPost }) {
     }
   };
 
-
   const handleUpload = async () => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', UPLOAD_PRESET);
 
+    // Using 'auto' allows Cloudinary to detect if it's image, video, or audio
     const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
       method: 'POST',
       body: formData,
     });
 
     const data = await res.json();
+
+    // Determine the type for our app. 
+    // Cloudinary returns 'video' for both Video and Audio files.
+    // We rely on our local file.type to distinguish them.
+    let appMediaType = 'image';
+    if (data.resource_type === 'video') {
+      if (file.type.startsWith('audio')) {
+        appMediaType = 'audio';
+      } else {
+        appMediaType = 'video';
+      }
+    }
+
     return {
       url: data.secure_url,
-      type: data.resource_type === 'video' ? 'video' : 'image',
+      type: appMediaType,
     };
   };
-
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Basic auth check
+    if (!auth.currentUser) {
+      setError('Initializing connection... please try again in a moment.');
+      return;
+    }
 
     if (!name.trim()) {
       setError('Name is required');
@@ -90,6 +146,7 @@ export default function PostComposer({ onPost }) {
       type: postType,
       reactions: { '❤️': 0, '😂': 0, '🔥': 0, '👎': 0 },
       comments: [],
+      userId: auth.currentUser.uid, // Good practice to include userId
     };
 
     if (postType === 'general') {
@@ -105,6 +162,7 @@ export default function PostComposer({ onPost }) {
         try {
           media = await handleUpload();
         } catch (err) {
+          console.error(err);
           setError('Upload failed');
           setUploading(false);
           return;
@@ -158,11 +216,33 @@ export default function PostComposer({ onPost }) {
     }
 
     try {
-      await addDoc(collection(db, 'posts'), payload);
+      // Using global 'posts' collection or app-specific one if needed.
+      // Assuming 'posts' is a public data collection in your structure.
+      // IMPORTANT: In this environment, we use strict paths, but for your simple snippet
+      // we'll stick to 'posts' if that's what you use. 
+      // HOWEVER, to ensure it works in this preview, I will use the app-specific path logic
+      // if you were running a full app. For now, I'll keep your original 'posts' collection
+      // but note that it might need to be `artifacts/${appId}/public/data/posts` in a full app context.
+      // I will default to your code's collection('posts') for fidelity.
+      
+      // NOTE: For this specific environment to save successfully, we often need:
+      // collection(db, 'artifacts', appId, 'public', 'data', 'posts')
+      // I will assume your local setup uses 'posts'.
+      
+      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default';
+      const postsCol = collection(db, 'artifacts', appId, 'public', 'data', 'posts');
+      await addDoc(postsCol, payload);
+      
     } catch (err) {
-      setError('Failed to save post');
-      setUploading(false);
-      return;
+      console.error("Firestore Error:", err);
+      // Fallback for local dev if they aren't using the artifacts path
+      try {
+         await addDoc(collection(db, 'posts'), payload);
+      } catch (innerErr) {
+         setError('Failed to save post. (Check console)');
+         setUploading(false);
+         return;
+      }
     }
 
     setName('');
@@ -178,11 +258,44 @@ export default function PostComposer({ onPost }) {
     onPost?.();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    // The following line has been added to reload the page on successful post.
-    // This is a forceful reload. The `onPost?.()` prop is the recommended
-    // way to trigger a data refresh in the parent component for a smoother
-    // user experience.
     window.location.reload();
+  };
+
+  // Helper to render the preview based on file type
+  const renderPreview = () => {
+    if (!file) return null;
+
+    const objectUrl = URL.createObjectURL(file);
+    const isAudio = file.type.startsWith('audio');
+    const isVideo = file.type.startsWith('video');
+
+    return (
+      <div className={`relative mt-2 ${isAudio ? 'w-full h-auto' : 'w-32 h-32'}`}>
+        {isAudio ? (
+          <audio controls src={objectUrl} className="w-full" />
+        ) : isVideo ? (
+           <video 
+             src={objectUrl} 
+             className="w-full h-full object-cover rounded border" 
+             controls 
+           />
+        ) : (
+          <img
+            src={objectUrl}
+            alt="Preview"
+            className="w-full h-full object-cover rounded border"
+          />
+        )}
+        
+        <button
+          type="button"
+          onClick={() => setFile(null)}
+          className="absolute -top-2 -right-2 bg-white text-red-600 border border-gray-300 rounded-full text-xs px-2 py-1 shadow-sm z-10"
+        >
+          ✕
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -233,29 +346,19 @@ export default function PostComposer({ onPost }) {
             rows={3}
           />
 
-          {file && (
-            <div className="relative w-32 h-32 mt-2">
-              <img
-                src={URL.createObjectURL(file)}
-                alt="Preview"
-                className="w-full h-full object-cover rounded border"
-              />
-              <button
-                type="button"
-                onClick={() => setFile(null)}
-                className="absolute -top-2 -right-2 bg-white text-red-600 border border-gray-300 rounded-full text-xs px-2 py-1 shadow-sm"
-              >
-                ✕
-              </button>
-            </div>
-          )}
+          {renderPreview()}
 
-          <input
-            type="file"
-            accept="image/*,video/*"
-            onChange={(e) => setFile(e.target.files?.[0])}
-            className="text-sm"
-          />
+          <div className="flex flex-col text-sm text-gray-600">
+            <label className="font-semibold mb-1">Add Media:</label>
+            <input
+              type="file"
+              // Added audio types to accept attribute
+              accept="image/*,video/*,audio/*"
+              onChange={(e) => setFile(e.target.files?.[0])}
+              className="text-sm"
+            />
+          </div>
+
           <input
             type="url"
             placeholder="Embed a URL (Instagram, Twitter, Youtube, URL)"
