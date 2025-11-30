@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm ci --prefix steel-sons-site && npm run build --prefix steel-sons-site",
+  "buildCommand": "npm install --prefix steel-sons-site && npm run build --prefix steel-sons-site",
   "outputDirectory": "steel-sons-site/dist",
   "installCommand": "echo 'Skipping root install'"
 }
