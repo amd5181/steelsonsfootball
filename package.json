@@ -1,5 +1,1 @@
-{
-  "scripts": {
-    "vercel-build": "cd steel-sons-site && npm ci && npm run build && cd .. && mv steel-sons-site/dist dist"
-  }
-}
+{}
