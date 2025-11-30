@@ -1,6 +1,5 @@
 {
   "scripts": {
-    "build": "cd steel-sons-site && npm install && npm run build",
-    "vercel-build": "cd steel-sons-site && npm install && npm run build && mv steel-sons-site/dist dist"
+    "vercel-build": "cd steel-sons-site && npm ci && npm run build && cd .. && mv steel-sons-site/dist dist"
   }
 }
